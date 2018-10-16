@@ -5,6 +5,12 @@ Python, Azure API, Azure Model Management Services, Azure Cognitive Services, Az
 File Storage and CosmoDB.
 
 ## Custom System Components
+
+With the sole exception of the ML Training Data and ML Training Package, these components 
+is distributed as a standard Python package built into a docker container and distributed 
+through the Azure container service. This is because these components are pure Python  
+and can take advantage of Python Setuptools for dependency management
+
 ### Training Data Set
 The demonstration training data set will consist of a set of images and accompanying 
 metadata which will be either used to build the classifier system, classified by that 
