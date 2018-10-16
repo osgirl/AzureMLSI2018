@@ -1,11 +1,11 @@
-# AzureMLSI2018
-##Introduction
+# Azure ML Model Deployment and Sustainment SI 2018
+## Introduction
 Awesome project experimenting with assembling a realm time ML processing system using 
 Python, Azure API, Azure Model Management Services, Azure Cognitive Services, Azure
 File Storage and CosmoDB.
 
-##Custom System Components
-###Training Data Set
+## Custom System Components
+### Training Data Set
 The demonstration training data set will consist of a set of images and accompanying 
 metadata which will be either used to build the classifier system, classified by that 
 system, or in some cases both. This is because this data set will include an initial 
@@ -24,7 +24,7 @@ All of these images and metadata files will be stored as files linked by filenam
 'abc.json') on Azure File Storage where they can be accessed by the demonstration when 
 required.
 
-###Demonstration Orchestration Script
+### Demonstration Orchestration Script
 
 Python script downloaded from the demonstration GitHub with most of the other demonstration 
 resources (apart from the Training Data) which carries out the preparatory activities 
@@ -40,7 +40,7 @@ required to launch the demonstration Azure cluster from outside the Azure enviro
 4. Initialize the Demonstration Azure Cluster components from the stored containers 
    and pointing them to the requisite cluster resources
 
-###Demonstration Initialization Script
+### Demonstration Initialization Script
 The first containerized Demonstration Component running in the Azure cluster, consists 
 of a Python script which runs once upon the initialization of the container, and so 
 may share a container with the other, persistent services
@@ -56,17 +56,17 @@ of users with the system.
 
 
 
-###Model Management Services Facial Classifier Trainer
+### Model Management Services Facial Classifier Trainer
 This is a Python/C++ script running on either a Container (assuming they can be GPU 
 accelerated) or a VM. This service carries out two basic actions: retraining the facial 
 classifier and batch relabeling.
 
-####Facial Classifier Retraining
+#### Facial Classifier Retraining
 When a new classifier is produced by the retraining process, this component will extract 
 all the faces for non-labeled images in CosmoDB and re-predict their labels based on 
 the new classifier and update with these new predicted labels 
 
-####Batch Relabeling
+#### Batch Relabeling
 Upon updating the classifier, this service may also re-run unlabeled faces stored in the Cluster 
 State Repository against the classifier and update their predicted labels for the display.
 
@@ -87,9 +87,9 @@ for the demonstration system. Primarily allows users to
 
 ## Azure Provided Components
 
-###Cognitive Services Facial Extractor
+### Cognitive Services Facial Extractor
 This is an out-of-the-box service provided by Azure (not a containerized Python script), 
 initialized by the orchestration script and used by the demonstration initialization 
 script to determine if faces exist in test images and extract those faces for classification
 
-###System State Repository (CosmoDB)
+### System State Repository (CosmoDB)
