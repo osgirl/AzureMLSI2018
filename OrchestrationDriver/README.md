@@ -8,7 +8,7 @@ to prepare the cluster for the deployment of the demonstration system.
 into the Azure File Storage service for later user by the components of the Demonstration 
 cluster
 2. Builds the Python packages of the other components
-3. Builds the Docker containers of hte other components, including the built Python 
+3. Builds the Docker containers of the other components, including the built Python 
    Packages
 4. Deploys the component Docker containers to the Azure Container Storage system
 5. Instantiates and configures the shared resources of the cluster
@@ -16,3 +16,11 @@ cluster
    and configures them with the shared resources
 
 # Instructions
+
+pip3 install -r requirements.txt 
+python3 OrchestrationDriver.py
+
+# Resources
+
+https://github.com/Azure-Samples/container-service-python-manage
+https://docs.microsoft.com/en-us/azure/storage/files/storage-python-how-to-use-file-storage
