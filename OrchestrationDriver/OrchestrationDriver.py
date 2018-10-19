@@ -5,16 +5,30 @@ Deployment script for:
 * Loading the demonstration Test Data into Azure File Storage
 * Building the Demonstration System Containers and deploying to Azure Storage
 * Starting the Demonstration System Containers on Azure to initialize the cluster
-'''
 
+Resources
+https://github.com/Azure-Samples/container-instances-python-manage    
+
+'''
+from utilities import AzureContext
 from azure.storage.file import FileService
 from azure.storage.file import ContentSettings
+from azure.common.credentials import ServicePrincipalCredentials
+
+from azure.mgmt.resource import ResourceManagementClient
+from azure.mgmt.containerinstance import ContainerInstanceManagementClient
+from azure.mgmt.containerinstance.models import (ContainerGroup, Container, ContainerPort, Port, IpAddress, 
+                                                 ResourceRequirements, ResourceRequests, ContainerGroupNetworkProtocol, OperatingSystemTypes)
+#from azure.mgmt.containerregistry import ContainerRegistryManagementClient
+from azure.mgmt.containerregistry.v2018_09_01.container_registry_management_client import ContainerRegistryManagementClient
+from azure.mgmt.containerregistry.v2018_09_01.models import Registry
+from azure.mgmt.containerregistry.v2018_09_01.models import ImportImageParameters, ImportSource
+
 import argparse
 import os
 
-#shareName = "AZMLSITestData"
-shareName = 'azmltestdata'
-dirName = "testDataDir"
+import OrchestrationDriverConfig as cfg
+
 
 def cleanupAccountDir(fileService, shareName, dirName):
     '''
@@ -53,29 +67,95 @@ def deployDockerContainer():
     
     return None
 
-if __name__ == '__main__':
-    #Note the account and account password used here is for a STORAGE account, not the Azure account overall
-    #or individual subscription
-    
-    parser = argparse.ArgumentParser(description='Load image files from the provided directory into a test share and directory on Azure')
-    parser.add_argument('--storAcc', type=str, help='password string for storage account')
-    parser.add_argument('--storPass', dest='accumulate', action='store_const',
-                        const=sum, default=max,
-                        help='password string for the storage account')
+def create_container_group(client, demoResourceGroupName, name, location, image, memory, cpu):
 
-    args = parser.parse_args()
-    print(args.accumulate(args.integers))
+   # setup default values
+   port = 80
+   container_resource_requirements = None
+   command = None
+   environment_variables = None
+
+   # set memory and cpu
+   container_resource_requests = ResourceRequests(memory_in_gb = memory, cpu = cpu)
+   container_resource_requirements = ResourceRequirements(requests = container_resource_requests)
+   
+   container = Container(name = name,
+                         image = image,
+                         resources = container_resource_requirements,
+                         command = command,
+                         ports = [ContainerPort(port=port)],
+                         environment_variables = environment_variables)
+
+   # defaults for container group
+   cgroup_os_type = OperatingSystemTypes.linux
+   cgroup_ip_address = IpAddress(type='public', ports = [Port(protocol=ContainerGroupNetworkProtocol.tcp, port = port)])
+   image_registry_credentials = None
+   cgroup = ContainerGroup(location = location, containers = [container], os_type = cgroup_os_type, ip_address = cgroup_ip_address, image_registry_credentials = image_registry_credentials)
+   client.container_groups.create_or_update(demoResourceGroupName, name, cgroup)
+
+def delete_resources(demoResourceGroupName, demoContainerGroupName): 
+   client.container_groups.delete(demoResourceGroupName, demoContainerGroupName)
+   resource_client.resource_groups.delete(demoResourceGroupName)
+
+if __name__ == '__main__':
+
+    fileService = FileService(account_name=cfg.fileStorageAccountName, account_key=cfg.fileStorageSecret)
+    fileService.create_share(cfg.fileStorageShareName)
+    fileService.create_directory(cfg.fileStorageShareName, cfg.fileStorageDir)
     
-    fileService = FileService(account_name='enrondata666', account_key='zmGGXZMH2wm/D+U+/b4uruW6y545DXKottc+6qY5a3kjk/1Yuvb/xm5FyE4cB+iOZ4db212q/j7AOEeK74sKnA==')
-    fileService.create_share(shareName)
-    fileService.create_directory(shareName, dirName)
-    
+    #This will arbitrarily copy the contents of a system folder to the Azure file storage
     for dirPath, dirNames, fileNames in os.walk("testDataFolder"):
         for fileName in fileNames:
             fileHandle = open(dirPath + "/" + fileName) #TODO make more robust with a non-OS specific seperator
-            fileService.create_file_from_path(shareName, dirName, fileName, dirPath + "/" + fileName)
+            fileService.create_file_from_path(cfg.fileStorageShareName, cfg.fileStorageDir, fileName, dirPath + "/" + fileName)
             fileHandle.close()
     
-    cleanupAccountDir(fileService, shareName, dirName)
-            
+    cleanupAccountDir(fileService, cfg.fileStorageShareName, cfg.fileStorageDir)
     
+    #Uses a bit of stub code provided by Azure with credentials collected using the following
+    #https://docs.microsoft.com/en-us/azure/azure-resource-manager/resource-group-create-service-principal-portal
+    azure_context = AzureContext(
+        subscription_id = cfg.azureSubscriptionId,
+        client_id = cfg.servicePrincipalClientId,
+        client_secret = cfg.servicePrincipalClientKey,
+        tenant = cfg.servicePrincipalTenantId
+    )
+
+    #Generates the required clients using the azure context from above
+    resource_client = ResourceManagementClient(azure_context.credentials, azure_context.subscription_id)
+    client = ContainerInstanceManagementClient(azure_context.credentials, azure_context.subscription_id)
+    registryClient = ContainerRegistryManagementClient(azure_context.credentials, azure_context.subscription_id)
+    
+    location = 'eastus'
+
+    #Generate resource group and adds a container group to it in preperation for the cluster launch
+    resource_client.resource_groups.create_or_update(cfg.demoResourceGroupName, {'location': location})
+    create_container_group(client = client, demoResourceGroupName = cfg.demoResourceGroupName, 
+        name = cfg.demoContainerGroupName, 
+        location = location, 
+        image = "microsoft/aci-helloworld", 
+        memory = 1, 
+        cpu = 1) 
+        
+    cgroup = client.container_groups.get(cfg.demoResourceGroupName, cfg.demoContainerGroupName)
+    print("{0}, {1}".format(cgroup.name, cgroup.location))
+    
+    #Cleanup resource and container groups
+    client.container_groups.delete(cfg.demoResourceGroupName, cfg.demoContainerGroupName)
+    resource_client.resource_groups.delete(cfg.demoResourceGroupName)
+    
+    '''
+    print(registryClient.registries.check_name_availability(cfg.demoRegistryGroupName))
+    for registry in registryClient.registries.list():
+        print(registry)
+        
+        #This is somewhat sticky as the actual location of the docker file depends on the storage driver used by
+        #the local instance of docker
+        ImportImageParameters(ImportSource())
+        registryClient.registries.import_image(cfg.demoResourceGroupName, cfg.demoRegistryGroupName, parameters)
+        
+    #Turns out it is EXTREMELY annoying to create a new registry programmatically due to the need to completely
+    #fill out the attributes https://portal.azure.com/#create/Microsoft.ContainerRegistry
+    
+    #registryClient.registries.create(demoResourceGroupName, registry_name)
+    '''
