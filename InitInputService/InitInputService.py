@@ -25,33 +25,34 @@ if __name__ == '__main__':
 
     '''
     
-    '''
-    #Cassandra connection options for the Azure CosmoDB with Cassandra API from the quickstart documentation on the portal page
-    #grabbed my CA.pem from Mozilla https://curl.haxx.se/docs/caextract.html
-    ssl_opts = {
-        'ca_certs': './cacert.pem',
-        'ssl_version': PROTOCOL_TLSv1_2,
-        'cert_reqs': CERT_REQUIRED  # Certificates are required and validated
-    }
-    auth_provider = PlainTextAuthProvider(username=cfg.cosmoDBUsername, password=cfg.cosmoDBSecret)
-    cluster = Cluster([cfg.cosmoDBEndpointUri], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
-    '''
     
-    #Running the cluster from a local instance without security options engaged
-    #https://www.digitalocean.com/community/tutorials/how-to-install-cassandra-and-run-a-single-node-cluster-on-ubuntu-14-04
-    cluster = Cluster()
-    
+    if cfg.localDBEndpoint:
+        #Running the cluster from a local instance without security options engaged
+        #https://www.digitalocean.com/community/tutorials/how-to-install-cassandra-and-run-a-single-node-cluster-on-ubuntu-14-04
+        cluster = Cluster()
+    else:
+        #Cassandra connection options for the Azure CosmoDB with Cassandra API from the quickstart documentation on the portal page
+        #grabbed my CA.pem from Mozilla https://curl.haxx.se/docs/caextract.html
+        ssl_opts = {
+            'ca_certs': './cacert.pem',
+            'ssl_version': PROTOCOL_TLSv1_2,
+            'cert_reqs': CERT_REQUIRED  # Certificates are required and validated
+        }
+        auth_provider = PlainTextAuthProvider(username=cfg.cosmoDBUsername, password=cfg.cosmoDBSecret)
+        cluster = Cluster([cfg.cosmoDBEndpointUri], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
+        
+        
+        
+    #Checks to ensure that the demonstration keyspace exists and creates it if not 
     session = cluster.connect()
-
-    #Creates keyspace from variable name
     print("\nCreating Keyspace")
-    #Default keyspace settings from Azure CosmoDB
-    #session.execute('CREATE KEYSPACE IF NOT EXISTS ' + cfg.cosmoDBKeyspaceName + ' WITH replication = {\'class\': \'NetworkTopologyStrategy\', \'datacenter\' : 1 }'); #Formatting is stupid on this string due to the additional curley braces
-    
-    #Modified local keyspace settings
-    #session.execute('DROP KEYSPACE ' + cfg.cosmoDBKeyspaceName)
-    session.execute('CREATE KEYSPACE IF NOT EXISTS ' + cfg.cosmoDBKeyspaceName + ' WITH replication = {\'class\' : \'SimpleStrategy\', \'replication_factor\' : 1 }')
-    session.shutdown()
+    if cfg.localDBEndpoint:
+        #Modified local keyspace settings
+        session.execute('CREATE KEYSPACE IF NOT EXISTS ' + cfg.cosmoDBKeyspaceName + ' WITH replication = {\'class\' : \'SimpleStrategy\', \'replication_factor\' : 1 }')
+        session.shutdown()
+    else:
+        #Default keyspace settings from Azure CosmoDB
+        session.execute('CREATE KEYSPACE IF NOT EXISTS ' + cfg.cosmoDBKeyspaceName + ' WITH replication = {\'class\': \'NetworkTopologyStrategy\', \'datacenter\' : 1 }'); #Formatting is stupid on this string due to the additional curley braces
     
     session = cluster.connect(cfg.cosmoDBKeyspaceName)
     
@@ -77,7 +78,7 @@ if __name__ == '__main__':
         session.execute('CREATE TABLE IF NOT EXISTS ' + personaEdgeTableName + ' (persona_name text, assoc_image_id text, label_assoc_flag boolean, pred_assoc_flag boolean, PRIMARY KEY(persona_name, assoc_image_id))');
         
         #Refined table stores extracted face blobs and associative edges to the raw image from which it was derived
-        session.execute('CREATE TABLE IF NOT EXISTS ' + refinedImageTableName + ' (image_id text, raw_image_edge_id text, persona_id int, image_bytes blob, PRIMARY KEY(image_id))');
+        session.execute('CREATE TABLE IF NOT EXISTS ' + refinedImageTableName + ' (image_id text, raw_image_edge_id text, image_bytes blob, PRIMARY KEY(image_id))');
         
         #Raw table stores pre-extraction images that contain at least one face
         session.execute('CREATE TABLE IF NOT EXISTS ' + rawImageTableName + ' (image_id text, refined_image_edge_id text, file_uri text, image_bytes blob, PRIMARY KEY(image_id))');
@@ -102,22 +103,24 @@ if __name__ == '__main__':
                 choice = random.choice((0,1,2))
                 
                 #For each image extract the label and use to generate a persona, redundant writes will cancel out
-                imageBytes = fileHandle.read();
-                hashedBytes = str(hashlib.md5(imageBytes).digest())
+                image_bytes = fileHandle.read();
+                hashed_bytes = hashlib.md5(image_bytes).digest()
+                hashed_bytes_int = int.from_bytes(hashed_bytes, byteorder='big') #Good identifier, sadly un
+                hashed_bytes_str = str(hashed_bytes_int) #Stupid workaround to Python high precision int incompatability
                 
                 #
                 session.execute(personaInsertQuery, (label,))
-                session.execute(rawInsertQuery, (hashedBytes, "", fileName, imageBytes))
-                session.execute(refinedInsertQuery, (hashedBytes, "", imageBytes))
+                session.execute(rawInsertQuery, (hashed_bytes_str, "", fileName, image_bytes))
+                session.execute(refinedInsertQuery, (hashed_bytes_str, "", image_bytes))
                 
                 #Add image rows
-                session.execute(refinedInsertQuery, (hashedBytes, hashedBytes, b""))
+                session.execute(refinedInsertQuery, (hashed_bytes_str, hashed_bytes_str, b""))
                 
                 #For one out of every three images register as label associated, otherwise predictive
                 if choice == 2:
-                    session.execute(personaEdgeInsertQuery, (label, hashedBytes, True, False))
+                    session.execute(personaEdgeInsertQuery, (label, hashed_bytes_str, True, False))
                 else:
-                    session.execute(personaEdgeInsertQuery, (label, hashedBytes, False, True))
+                    session.execute(personaEdgeInsertQuery, (label, hashed_bytes_str, False, True))
                 
                 #fileService.create_file_from_path(cfg.fileStorageShareName, cfg.fileStorageDir, fileName, dirPath + "/" + fileName)
                 fileHandle.close()
