@@ -3,3 +3,5 @@ azure-common>=1.1.15
 azure-mgmt-containerregistry>=1.0
 azure-mgmt-resource>=1.1.0
 azure-mgmt-containerinstance==1.1.0
+azure-cosmos>=1.0.0
+cassandra-driver>=1.0.0

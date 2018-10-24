@@ -24,10 +24,15 @@ from azure.mgmt.containerregistry.v2018_09_01.container_registry_management_clie
 from azure.mgmt.containerregistry.v2018_09_01.models import Registry
 from azure.mgmt.containerregistry.v2018_09_01.models import ImportImageParameters, ImportSource
 
-import argparse
+from cassandra.cluster import Cluster
+from cassandra.auth import PlainTextAuthProvider
+from ssl import PROTOCOL_TLSv1_2, CERT_REQUIRED
+
 import os
 
-import OrchestrationDriverConfig as cfg
+import json
+
+from azure.cosmos.cosmos_client import CosmosClient
 
 
 def cleanupAccountDir(fileService, shareName, dirName):
@@ -96,9 +101,99 @@ def create_container_group(client, demoResourceGroupName, name, location, image,
 def delete_resources(demoResourceGroupName, demoContainerGroupName): 
    client.container_groups.delete(demoResourceGroupName, demoContainerGroupName)
    resource_client.resource_groups.delete(demoResourceGroupName)
+   
+def generateCosmoDB():
+    '''
+    Programmatically generates the CosmoDB Cassandra instance and retrieves the credentials required to generate a
+    client and impose the required structure
+    '''
+    cosmos_client.session
+
+def generateCosmoDBStructure(cfg):
+    '''
+    Prepares the CosmoDB Cassandra instance for the demonstration by imposing the required keyspace and table structure
+    '''
+    cfg = cfg['cosmoDBParams']
+    if cfg['localDBEndpoint']:
+        #Running the cluster from a local instance without security options engaged
+        #https://www.digitalocean.com/community/tutorials/how-to-install-cassandra-and-run-a-single-node-cluster-on-ubuntu-14-04
+        cluster = Cluster()
+    else:
+        #Cassandra connection options for the Azure CosmoDB with Cassandra API from the quickstart documentation on the portal page
+        #grabbed my CA.pem from Mozilla https://curl.haxx.se/docs/caextract.html
+        ssl_opts = {
+            'ca_certs': './cacert.pem',
+            'ssl_version': PROTOCOL_TLSv1_2,
+            'cert_reqs': CERT_REQUIRED  # Certificates are required and validated
+        }
+        auth_provider = PlainTextAuthProvider(username=cfg['cosmoDBAccount'], password=cfg['cosmoDBSecret'])
+        cluster = Cluster([cfg['cosmoDBEndpointUri']], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
+        
+    #Checks to ensure that the demonstration keyspace exists and creates it if not 
+    session = cluster.connect()
+    print("\nCreating Keyspace")
+    if cfg['localDBEndpoint']:
+        #Modified local keyspace settings
+        session.execute('CREATE KEYSPACE IF NOT EXISTS ' + cfg['cosmoDBKeyspaceName'] + ' WITH replication = {\'class\' : \'SimpleStrategy\', \'replication_factor\' : 1 }')
+        session.shutdown()
+    else:
+        #Default keyspace settings from Azure CosmoDB
+        session.execute('CREATE KEYSPACE IF NOT EXISTS ' + cfg['cosmoDBKeyspaceName'] + ' WITH replication = {\'class\': \'NetworkTopologyStrategy\', \'datacenter\' : 1 }'); #Formatting is stupid on this string due to the additional curley braces
+    
+    session = cluster.connect(cfg['cosmoDBKeyspaceName']);   
+
+    personaTableName = cfg['personaTableName']
+    personaEdgeTableName = cfg['personaEdgeTableName']
+    rawImageTableName = cfg['rawImageTableName']
+    refinedImageTableName = cfg['refinedImageTableName']
+
+    #Create table
+    print("\nCreating Table")
+    session.execute('DROP TABLE IF EXISTS ' + personaTableName)
+    session.execute('DROP TABLE IF EXISTS ' + personaEdgeTableName)
+    session.execute('DROP TABLE IF EXISTS ' + rawImageTableName)
+    session.execute('DROP TABLE IF EXISTS ' + refinedImageTableName)
+
+    #Persona table provides metadata on each persona in the demonstration database such as name and date of birth
+    #This table is set up primarily to be scanned and used to pivot to the persona edge table to discover images 
+    session.execute('CREATE TABLE IF NOT EXISTS ' + personaTableName + ' (persona_name text, PRIMARY KEY(persona_name))');
+    
+    #Persona edge table contains the associations to pivot from a selected persona to its associated images
+    #These associations can exist either due to explicit labeling or predicted labels
+    session.execute('CREATE TABLE IF NOT EXISTS ' + personaEdgeTableName + ' (persona_name text, assoc_image_id text, label_assoc_flag boolean, pred_assoc_flag boolean, PRIMARY KEY(persona_name, assoc_image_id))');
+    
+    #Refined table stores extracted face blobs and associative edges to the raw image from which it was derived
+    session.execute('CREATE TABLE IF NOT EXISTS ' + refinedImageTableName + ' (image_id text, raw_image_edge_id text, image_bytes blob, PRIMARY KEY(image_id))');
+    
+    #Raw table stores pre-extraction images that contain at least one face
+    session.execute('CREATE TABLE IF NOT EXISTS ' + rawImageTableName + ' (image_id text, refined_image_edge_id text, file_uri text, image_bytes blob, PRIMARY KEY(image_id))');
+
+
+def generateServiceConfigurationFiles(cfg):
+    '''
+        Uses the master configuration file for the orchestration driver with additional information generated from the
+        resource generation process to produce the VisualizationService, InputService and RetrainingService config files to be bundled
+        with their docker container
+    '''
+    input_service_config_dict = {
+        'AzureFileStorageParams':cfg['AzureFileStorageParams'], 
+        'cosmoDBParams':cfg['cosmoDBParams']
+    }
+    with open('./InputServiceConfig.json', 'w') as write_file:
+        json.dump(input_service_config_dict, write_file)
+
+    input_service_config_dict = {
+        'cosmoDBParams':cfg['cosmoDBParams']
+    }
+    with open('./VisualizationServiceConfig.json', 'w') as write_file:
+        json.dump(input_service_config_dict, write_file)
 
 if __name__ == '__main__':
-
+    
+    cfg = json.load(open('./OrchestrationDriverConfig.json', 'r'))
+    generateCosmoDBStructure(cfg)
+    generateServiceConfigurationFiles(cfg)
+    '''
     fileService = FileService(account_name=cfg.fileStorageAccountName, account_key=cfg.fileStorageSecret)
     fileService.create_share(cfg.fileStorageShareName)
     fileService.create_directory(cfg.fileStorageShareName, cfg.fileStorageDir)
@@ -143,7 +238,7 @@ if __name__ == '__main__':
     #Cleanup resource and container groups
     client.container_groups.delete(cfg.demoResourceGroupName, cfg.demoContainerGroupName)
     resource_client.resource_groups.delete(cfg.demoResourceGroupName)
-    
+    '''
     '''
     print(registryClient.registries.check_name_availability(cfg.demoRegistryGroupName))
     for registry in registryClient.registries.list():
