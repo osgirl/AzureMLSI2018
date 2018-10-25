@@ -1,4 +1,6 @@
 {
+	"//": "Determines whether the OrchestrationDriver will attempt to build and deploy the other service containers in addition to generating their configuration files and supporting Azure services. Used to enable local development",
+	"containerBuildDeploymentFlag": false,
 	"AzureSubscriptionParams": {
 		"azureSubscriptionId": "/*Id of the overall subscription*/",
 		"servicePrincipalClientId": "az_ml_si_service_principal",
@@ -6,17 +8,17 @@
 		"servicePrincipalTenantId": "/*Ditto*/"
 	},
 	"AzureFileStorageParams": {
-		"fileStorageShareName": "az_ml_si_storage",
-		"fileStorageDir": "test_data_dir",
-		"fileStorageAccountName": "",
-		"fileStorageSecret": "/*Secret key generated in README.md creation instructions*/"
+		"fileStorageAccountName": "azmlsifilestorage",
+		"fileStorageSecret": "/*Secret key generated in README.md creation instructions*/",
+		"fileStorageShareName": "az_ml_si_storage_share",
+		"fileStorageDir": "test_data_dir"
 	},
 	"cosmoDBParams": {
-		"cosmoDBAccount": "az_ml_si_db",
+		"DBName": "azmlsidb",
 		"cosmoDBSecret": "/*Secret key generated in README.md creation instructions*/",
 		"cosmoDBEndpointUri": "azmlsidb.cassandra.cosmosdb.azure.us",
 		"//": "localDBEndpoint is used to configure the various components for a local Cassandra instance, should default false",
-		"localDBEndpoint": false,
+		"localDBEndpointFlag": false,
 		"//2": "Default keyspace and table names used in the database, completely arbitrary",
 		"cosmoDBKeyspaceName": "az_ml_si_keyspace",
 		"personaTableName": "persona_table",
