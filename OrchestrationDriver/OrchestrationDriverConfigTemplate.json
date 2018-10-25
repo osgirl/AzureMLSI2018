@@ -1,0 +1,27 @@
+{
+	"AzureSubscriptionParams": {
+		"azureSubscriptionId": "/*Id of the overall subscription*/",
+		"servicePrincipalClientId": "az_ml_si_service_principal",
+		"servicePrincipalClientKey": "/*secret key generated from the process in the README.md*/",
+		"servicePrincipalTenantId": "/*Ditto*/"
+	},
+	"AzureFileStorageParams": {
+		"fileStorageShareName": "az_ml_si_storage",
+		"fileStorageDir": "test_data_dir",
+		"fileStorageAccountName": "",
+		"fileStorageSecret": "/*Secret key generated in README.md creation instructions*/"
+	},
+	"cosmoDBParams": {
+		"cosmoDBAccount": "az_ml_si_db",
+		"cosmoDBSecret": "/*Secret key generated in README.md creation instructions*/",
+		"cosmoDBEndpointUri": "azmlsidb.cassandra.cosmosdb.azure.us",
+		"//": "localDBEndpoint is used to configure the various components for a local Cassandra instance, should default false",
+		"localDBEndpoint": false,
+		"//2": "Default keyspace and table names used in the database, completely arbitrary",
+		"cosmoDBKeyspaceName": "az_ml_si_keyspace",
+		"personaTableName": "persona_table",
+		"personaEdgeTableName": "persona_edge_table",
+		"rawImageTableName": "raw_image_table",
+		"refinedImageTableName": "refined_image_table"
+	}
+}

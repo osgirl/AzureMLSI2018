@@ -1,101 +1,169 @@
 # Azure ML Model Deployment and Sustainment SI 2018
 ## Introduction
-Awesome project experimenting with assembling a realm time ML processing system using 
-Python, Azure API, Azure Model Management Services, Azure Cognitive Services, Azure
-File Storage and CosmoDB.
+GitHub project for an information processing system which provides an example of how 
+to design a modern ML processing system on public cloud architecture. Specifically 
+this system is designed to demonstrate several key DevOps concepts related to agile 
+systems and particularly ML systems
 
-## Custom System Components
+## Deployment Instructions
 
-With the sole exception of the ML Training Data and ML Training Package, these components 
-is distributed as a standard Python package built into a docker container and distributed 
-through the Azure container service. This is because these components are pure Python  
-and can take advantage of Python Setuptools for dependency management
+### Azure Setup
 
-### Training Data Set
-The demonstration training data set will consist of a set of images and accompanying 
-metadata which will be either used to build the classifier system, classified by that 
-system, or in some cases both. This is because this data set will include an initial 
-labeled set, as well as additional data which can be labeled after the initialization 
-of the demonstration to enhance its performance.
+1. Acquire an Azure subscription on the commercial or gov't cluster and login (portal.azure.com 
+or portal.azure.us respectively)
+1. Setup a Service Principal to allow the Orchestration Driver to create and manipulate 
+processing resources (https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal)
+note ClientId, ClientSecret and TenantId for use in configuration later
+1. Generate a Azure File Storage Instance (If using pre-generated test data)
+1. Generate a CosmoDB Cassanda Instance
+    1. Generate CosmoDB Cassandra API instance for the Python driver using the following instructions 
+    (https://docs.microsoft.com/en-us/azure/cosmos-db/create-cassandra-python), providing 
+    and noting a custom service name and endpoint url (which will be used for configuration later)*
+    2. Navigate to the generated CosmoDB Cassandra resource on the portal and go to quickstart, 
+    then note the CosmoDB secret (which will also be used for configuration)
 
-Currently these images will consists of pictures of three individuals (presidents), 
-potentially divided between "presidential" images (which are likely to be similar in 
-age and composition and therefore easily classified), "non-presidential" images 
-(more difficult to classify images of childhood, etc.) and various "noise" images.
+### Local Setup
+1. Ensure that the local environment has Internet access and can reach the portal.azure.us 
+   domain via browser
+1. Ensure that the local environment has a CLI accessible Docker, Git, Python 3.x and compatible pip 
+   instance ('sudo apt install docker-compose, git, python3, pip3' on Ubuntu)
+1. Ensure that the entire GitHub project repository is cloned locally 
+   ('git clone https://github.com/booz-allen-hamilton/AzureMLSI2018.git')
+1. From the root directory of the project, install the dependencies of the Orchestration 
+   Driver 'pip3 install -r ./OrchestrationDriver/requirements.txt'
+1. Copy and rename the "OrchestrationDriverConfigTemplate.json" to "OrchestrationDriverConfig.json"
+   then populate with the Azure Storage and Azure CosmoDB Cassandra information noted 
+   in the Azure setup instructions
+1. Execute OrchestrationDriver.py with Python 3 'python3 ./OrchestrationDriver/OrchestrationDriver.py', 
+   This should 
+    1. Generate remaining required services in Azure including the VLAN, ContainerRegistry 
+    and CognitiveServices
+    1. Configure and build the other services in the repository, register them with 
+    the Azure ContainerRegistry, and launch them
 
-The idea being to demonstrate how user supplied labeling after initialization allow 
-the classifier to recognize previously unknown, dissimilar but still valid entities.
+## Key Concepts 
 
-All of these images and metadata files will be stored as files linked by filename ('abc.jpg', 
-'abc.json') on Azure File Storage where they can be accessed by the demonstration when 
-required.
+* Programmatic Cloud Deployment
 
-### Demonstration Orchestration Script
+A key tenant of DevOps philosophy is the movement towards automation in development, 
+testing, building and deployment of systems. By providing the ability to create and 
+destroy virtually every key resource via API, public cloud services like Azure allow 
+entire systems to be described and deployed by software with little to no human involvement.
 
-Python script downloaded from the demonstration GitHub with most of the other demonstration 
-resources (apart from the Training Data) which carries out the preparatory activities 
-required to launch the demonstration Azure cluster from outside the Azure environment.
+Programmatic deployment exists on the opposite extreme of manual deployment using a 
+GUI and requires a compatible DSL/Library and API
 
-1. Load the Training Data Set (Stored Separately) into Azure File API for the Demonstration 
-   Initialization Script
-2. Build the Azure Containers from the local demonstration components (Python and Docker files) 
-   and submit to Azure for storage
-3. Initialize and (where training data is not required) Configure the demonstration resources  
-   including AD, VLAN, CosmoDB, Cognitive Services and Model Management accounts to 
-   be interacted with by the components within the demonstration Azure Cluster  
-4. Initialize the Demonstration Azure Cluster components from the stored containers 
-   and pointing them to the requisite cluster resources
+Programmatic deployment helps make complex systems more agile by making it easier to 
+test the impact of changes at any level of the system
 
-### Demonstration Initialization Script
-The first containerized Demonstration Component running in the Azure cluster, consists 
-of a Python script which runs once upon the initialization of the container, and so 
-may share a container with the other, persistent services
+* Service Oriented Architecture
 
-The initialization script performs multiple activities leading up to the initial interaction 
-of users with the system.
+In this case services are simplified to mean REST services, meaning software systems 
+which can only be interacted with via formally defined network interfaces (in this 
+case HTTP based)
 
-1. Pulling training data down from Azure File Storage and loading the labeled and unlabeled 
-   sets into their respective State Repository (CosmoDB) tables 
-2. Submitting the downloaded images to the Cognitive Services facial extractor, annotating 
-   images which do not contain faces in the Cluster State Repository, and when faces are returned 
-   appending those into the Cluster State Repository
+The advantage of the service approach is that it simplifies and formalizes communication 
+between system components. This has wide ranging effects including the ability to break 
+systems up into simple, easy to configure, easy to modify pieces. This, in turn, helps 
+make otherwise complex undertakings like scaling, migrating, configuration change easier 
+to execute.
+ 
+Service architectures go in hand with Docker based containerization, as REST interfaces 
+and ports are often the default means of communication in and out of a container, and 
+a lot of products built atop docker address the complexities of orchestrating those 
+communications across large numbers of both heterogeneous and homogenous services.
 
+* Dynamic ML Retrain and Deployment
+* Cloud Storage as a Service
 
+One of the truths of cloud architecture is that data is the lowest common denominator 
+of most information systems.
+By this I mean that architecture should be dictated by the position and movement of 
+data, not the other way round.
+(and should be) more persistent 
+then infrastructure. This means that it is usually advisable to separate data and storage 
+from other types of less persistent.
 
-### Model Management Services Facial Classifier Trainer
-This is a Python/C++ script running on either a Container (assuming they can be GPU 
-accelerated) or a VM. This service carries out two basic actions: retraining the facial 
-classifier and batch relabeling.
+This is represented in most Public Cloud architectures where multiple forms of long 
+and middle term storage (ex. Amazon S3, Glacier) exist and typically become the  
 
-#### Facial Classifier Retraining
-When a new classifier is produced by the retraining process, this component will extract 
-all the faces for non-labeled images in CosmoDB and re-predict their labels based on 
-the new classifier and update with these new predicted labels 
+Due in part to its relatively simple, linear key design the hardware footprint of Columnar 
+NoSQL is relatively easy to extrapolate from its data volume (rows, indices, datatypes). 
+This allows storage to be priced predictively based on data volume and access rates, rather then dynamic 
+hardware based metrics like
 
-#### Batch Relabeling
-Upon updating the classifier, this service may also re-run unlabeled faces stored in the Cluster 
-State Repository against the classifier and update their predicted labels for the display.
+## Demonstration System Services
 
-### Demonstration User Interface
-Python web server (Flask??) and HTML/JS frontend (Reactive.js??) which provides the web accessible user interface 
-for the demonstration system. Primarily allows users to 
+The demonstration cluster consists of three Python web services which are built and distributed 
+in Docker containers and deployed to an Azure cluster and the Orchestration Driver which 
+builds the Azure cluster and builds/deploys the service containers. These services 
+are scalable and can be replicated at will due to their reliance on Azure CosmosDB 
+for storage.
 
-1. View Personas available in the current collected image set
-2. View Labeled and Predicted Label Images Assigned to Each Persona (Note this step 
-   will activate the facial classifier trainer to retrain and relabel the image store)
-3. Confirm Predicted Labeled Images to add them to the Labeled set for training 
-4. Upload new images (either directly or via provided webpages to be scraped) to the current 
-   collected image set for feature extraction and labeling (Note this step will work 
-   with the Cognition Services and Model Management services to extract facial features 
-   and classify the new provided images)
-5. Monitor the current status of the classifier through metadata provided by the model 
-   management API
+### Orchestration Driver
+The orchestration driver is a Python script which can be run on any Internet connected 
+host which can reach the Azure API. Its two primary tasks are to: 
+* Build and deploy the service containers
+* Requisition and configure the shared services. 
+
+More information can be found in the README.md inside its subfolder.
+
+###Input Service Container
+The input service is a Python web app which is run in a docker container which 
+
+* Ingests prospective persona images into the CosmoDB to be processed by the TrainerClassifier 
+  service and presented by the Visualization Services.
+* Enriches these images with extracted faces using Cognitive Data Services prior to insertion into 
+  CosmoDB 
+
+Currently this data originates from the test data on Azure storage but may be replaced 
+by a real time web crawler in the future.
+
+More information can be found in the README.md inside its subfolder.
+
+### Trainer Classifier Service Container
+The Trainer Classifier Service Container is a Python web app which is run in a docker 
+container which 
+
+* Trains new versions of the facial classifier from training data stored 
+in CosmoDB and generated through the Visualization Service
+* Launches these new versions of the classifier via the AzureML API into containerized 
+services
+* Extracts unlabeled extracted faces and re-classifies them to determine their persona 
+association then updates their status in CosmoDB
+
+More information can be found in the README.md inside its subfolder.
+
+### Visualization Service Container
+The Visualization Service Container is a Python web app which is run in a docker container 
+which
+
+* Visualizes the personas current enumerated in CosmoDB
+* Visualizes the raw images and extracted faces labeled to belong to each persona
+* Visualizes the raw images and extracted faces predicted by the classifier to belong 
+to each persona
+* Labels predicted extracted faces as belonging or not belonging to a persona
+* Inserting new personas into the CosmoDB database
+
+More information can be found in the REAMDE.md inside its subfolder
 
 ## Azure Provided Components
 
-### Cognitive Services Facial Extractor
-This is an out-of-the-box service provided by Azure (not a containerized Python script), 
-initialized by the orchestration script and used by the demonstration initialization 
-script to determine if faces exist in test images and extract those faces for classification
+### CosmoDB With Cassandra API
+This DBaaS solution provides all of the storage and inter-service communication for the app. 
 
-### System State Repository (CosmoDB)
+It stores the personas, raw images, extracted faces and associations used by the various 
+parts of the system(table structure and fields are describe in greater detail in the Orchestration 
+Driver README.md).
+
+It also stores certain types of events (ex. labeling of images and addition personas) which allow  
+services to monitor each others behavior and trigger behaviors in response (in this case 
+retraining and deploying the classifier).
+
+### Cognitive Services Facial Extractor
+This is an out-of-the-box service provided by Azure, initialized by the Orchestration Driver and 
+interacted with by the Input Service to extract faces from potential persona related 
+images in order to be classified. 
+
+The details of this system are discussed further 
+in the README.md of the Input Service in its subfolder.
