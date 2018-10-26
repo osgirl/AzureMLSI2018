@@ -28,6 +28,8 @@ from cassandra.cluster import Cluster
 from cassandra.auth import PlainTextAuthProvider
 from ssl import PROTOCOL_TLSv1_2, CERT_REQUIRED
 
+import argparse
+
 import os
 
 import json
@@ -109,10 +111,13 @@ def generateCosmoDB():
     '''
     cosmos_client.session
 
-def generateCosmoDBStructure(cfg):
+def generateCosmoDBStructure(cfg, db_name, db_key, ca_file_uri):
     '''
     Prepares the CosmoDB Cassandra instance for the demonstration by imposing the required keyspace and table structure
     '''
+    
+    endpoint_uri = db_name + '.cassandra.cosmosdb.azure.us'
+    
     cfg = cfg['cosmoDBParams']
     if cfg['localDBEndpoint']:
         #Running the cluster from a local instance without security options engaged
@@ -122,12 +127,12 @@ def generateCosmoDBStructure(cfg):
         #Cassandra connection options for the Azure CosmoDB with Cassandra API from the quickstart documentation on the portal page
         #grabbed my CA.pem from Mozilla https://curl.haxx.se/docs/caextract.html
         ssl_opts = {
-            'ca_certs': './cacert.pem',
+            'ca_certs': ca_file_uri,
             'ssl_version': PROTOCOL_TLSv1_2,
             'cert_reqs': CERT_REQUIRED  # Certificates are required and validated
         }
-        auth_provider = PlainTextAuthProvider(username=cfg['cosmoDBAccount'], password=cfg['cosmoDBSecret'])
-        cluster = Cluster([cfg['cosmoDBEndpointUri']], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
+        auth_provider = PlainTextAuthProvider(username=db_name, password=db_key)
+        cluster = Cluster([endpoint_uri], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
         
     #Checks to ensure that the demonstration keyspace exists and creates it if not 
     session = cluster.connect()
@@ -169,12 +174,18 @@ def generateCosmoDBStructure(cfg):
     session.execute('CREATE TABLE IF NOT EXISTS ' + rawImageTableName + ' (image_id text, refined_image_edge_id text, file_uri text, image_bytes blob, PRIMARY KEY(image_id))');
 
 
-def generateServiceConfigurationFiles(cfg):
+def generateServiceConfigurationFiles(cfg, db_key, db_name, stor_key, stor_name):
     '''
         Uses the master configuration file for the orchestration driver with additional information generated from the
         resource generation process to produce the VisualizationService, InputService and RetrainingService config files to be bundled
         with their docker container
     '''
+    #Add argument parameters to the json dictionaries for the services
+    cfg['dbName'] = db_name
+    cfg['dbKey'] = db_key
+    cfg['storageName'] = stor_name
+    cfg['storageKey'] = stor_key
+    
     input_service_config_dict = {
         'AzureFileStorageParams':cfg['AzureFileStorageParams'], 
         'cosmoDBParams':cfg['cosmoDBParams']
@@ -188,11 +199,32 @@ def generateServiceConfigurationFiles(cfg):
     with open('./VisualizationServiceConfig.json', 'w') as write_file:
         json.dump(input_service_config_dict, write_file)
 
-if __name__ == '__main__':
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-dk', nargs=1)
+    parser.add_argument('-dn', nargs=1)
+    parser.add_argument('-sk', nargs=1)
+    parser.add_argument('-sn')
+    args = parser.parse_args()
     
-    cfg = json.load(open('./OrchestrationDriverConfig.json', 'r'))
-    generateCosmoDBStructure(cfg)
-    generateServiceConfigurationFiles(cfg)
+    cfg = json.load(open('./OrchestrationDriver/OrchestrationDriverConfig.json', 'r'))
+    db_key = json.load(open(args.dk[0], 'r'))['primaryMasterKey']
+    db_name = args.dn[0]
+    stor_key = json.load(open(args.sk[0], 'r'))
+    stor_name = args.sn[0]
+    ca_file_uri = "./OrchestrationDriver/cacert.pem"
+    
+    print(db_key)
+    print(stor_key)
+    generateCosmoDBStructure(cfg, db_name, db_key, ca_file_uri)
+    generateServiceConfigurationFiles(cfg, db_key, db_name, stor_key, stor_name)
+    
+
+if __name__ == '__main__':
+    main()
+    
+    #generateCosmoDBStructure(cfg)
+    #generateServiceConfigurationFiles(cfg)
     '''
     fileService = FileService(account_name=cfg.fileStorageAccountName, account_key=cfg.fileStorageSecret)
     fileService.create_share(cfg.fileStorageShareName)

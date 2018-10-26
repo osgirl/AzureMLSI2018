@@ -8,15 +8,10 @@
 		"servicePrincipalTenantId": "/*Ditto*/"
 	},
 	"AzureFileStorageParams": {
-		"fileStorageAccountName": "azmlsifilestorage",
-		"fileStorageSecret": "/*Secret key generated in README.md creation instructions*/",
 		"fileStorageShareName": "az_ml_si_storage_share",
 		"fileStorageDir": "test_data_dir"
 	},
 	"cosmoDBParams": {
-		"DBName": "azmlsidb",
-		"cosmoDBSecret": "/*Secret key generated in README.md creation instructions*/",
-		"cosmoDBEndpointUri": "azmlsidb.cassandra.cosmosdb.azure.us",
 		"//": "localDBEndpoint is used to configure the various components for a local Cassandra instance, should default false",
 		"localDBEndpointFlag": false,
 		"//2": "Default keyspace and table names used in the database, completely arbitrary",
