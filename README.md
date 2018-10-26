@@ -9,17 +9,18 @@ systems and particularly ML systems
 
 ### Azure Setup For Ubuntu 16.04
 
-1. Navigate to the project root directory in the terminal/CLI
+1. Clone the project from (https://github.com/booz-allen-hamilton/AzureMLSI2018) and 
+   navigate to the project root directory in the terminal/CLI
 1. Acquire an Azure subscription on the commercial or gov't cluster with the permissions 
    needed to generate Storage and CosmosDB accounts
 1. Setup powershell in your local host environment
    (https://docs.microsoft.com/en-us/powershell/scripting/setup/installing-powershell-core-on-linux?view=powershell-6#snap-package)
 1. Configure the local powershell for Azure
    (https://docs.microsoft.com/en-us/powershell/azure/install-azurermps-maclinux?view=azurermps-6.11.0)
-   
-1. Connect Powershell to the Azure cluster and 
+1. Connect Powershell to the Azure cluster
    (https://docs.microsoft.com/en-us/azure/azure-government/documentation-government-get-started-connect-with-ps)
-1. Review and adjust parameters execute the deployment script at ./OrchestrationDriver/serviceDeploymentScript.ps1
+1. From inside the connected Powershell terminal, execute the service deployment script 
+   with the command './OrchestrationDriver/serviceDeploymentScript.ps1'
 
 1. While logged in Azure with powershell navigate to the OrchestrationDriver subfolder 
    of the project Github (), read 

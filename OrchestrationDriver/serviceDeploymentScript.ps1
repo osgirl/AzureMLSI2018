@@ -4,7 +4,7 @@
 ###
 ###It is intended to run from the root directory of the GitHub repository and will generate the credentials
 ###needed to run the 
-It is also intended to provide the parameters needed to build the Orchestration Driver
+###It is also intended to provide the parameters needed to build the Orchestration Driver
 ###config file and launch the rest of the deployment infrastructure.
 ###
 ###Note this script is intended to be run from the root directory of the AZMLSI project, and will not work properly otherwise
