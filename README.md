@@ -7,10 +7,36 @@ systems and particularly ML systems
 
 ## Deployment Instructions
 
-### Azure Setup
+### Azure Setup For Ubuntu 16.04
 
-1. Acquire an Azure subscription on the commercial or gov't cluster and login (portal.azure.com 
+1. Navigate to the project root directory in the terminal/CLI
+1. Acquire an Azure subscription on the commercial or gov't cluster with the permissions 
+   needed to generate Storage and CosmosDB accounts
+1. Setup powershell in your local host environment
+   (https://docs.microsoft.com/en-us/powershell/scripting/setup/installing-powershell-core-on-linux?view=powershell-6#snap-package)
+1. Configure the local powershell for Azure
+   (https://docs.microsoft.com/en-us/powershell/azure/install-azurermps-maclinux?view=azurermps-6.11.0)
+   
+1. Connect Powershell to the Azure cluster and execute the deployment script at ./OrchestrationDriver/serviceDeploymentScript.ps1
+
+   (https://docs.microsoft.com/en-us/azure/azure-government/documentation-government-get-started-connect-with-ps)
+1. While logged in Azure with powershell navigate to the OrchestrationDriver subfolder 
+   of the project Github (), read 
+  
+   , copy and paste serviceDeploymentScript.ps1
+
+generate a Azure File Storage Instance with the following 
+   in structions and arguments (https://docs.microsoft.com/en-us/azure/storage/common/storage-powershell-guide-full)
+    1.
+
+
+
+
+
+and login (portal.azure.com 
 or portal.azure.us respectively)
+1. Install local Azure Powershell Instance (required on Gov't) to 
+   (https://docs.microsoft.com/en-us/powershell/scripting/setup/installing-powershell-core-on-linux?view=powershell-6)
 1. Setup a Service Principal to allow the Orchestration Driver to create and manipulate 
 processing resources (https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal)
 note ClientId, ClientSecret and TenantId for use in configuration later
