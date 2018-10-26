@@ -17,9 +17,10 @@ systems and particularly ML systems
 1. Configure the local powershell for Azure
    (https://docs.microsoft.com/en-us/powershell/azure/install-azurermps-maclinux?view=azurermps-6.11.0)
    
-1. Connect Powershell to the Azure cluster and execute the deployment script at ./OrchestrationDriver/serviceDeploymentScript.ps1
-
+1. Connect Powershell to the Azure cluster and 
    (https://docs.microsoft.com/en-us/azure/azure-government/documentation-government-get-started-connect-with-ps)
+1. Review and adjust parameters execute the deployment script at ./OrchestrationDriver/serviceDeploymentScript.ps1
+
 1. While logged in Azure with powershell navigate to the OrchestrationDriver subfolder 
    of the project Github (), read 
   
