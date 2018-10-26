@@ -47,7 +47,7 @@ $storageAccountKey | ConvertTo-Json -depth 100 | Out-File "./OrchestrationDriver
 $dbKeysJson = Invoke-AzureRmResourceAction -Action listKeys -ResourceType "Microsoft.DocumentDb/databaseAccounts" -ApiVersion "2015-04-08" -ResourceGroupName $resourceGroup -Name $DBName
 $dbKeysJson | ConvertTo-Json -depth 100 | Out-File "./OrchestrationDriver/dbKeys.json"
 
-pip3 -r ./OrchestrationDriver/requirements.txt 
+pip3 install -r ./OrchestrationDriver/requirements.txt 
 python3 ./OrchestrationDriver/OrchestrationDriver.py -dk ./OrchestrationDriver/dbKeys.json -dn $DBName -sk ./OrchestrationDriver/storKeys.json -sn $storageAccountName
 
 $containerRegistryName ="myContainerRegistry"
