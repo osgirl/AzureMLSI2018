@@ -47,4 +47,16 @@ $storageAccountKey | ConvertTo-Json -depth 100 | Out-File "./OrchestrationDriver
 $dbKeysJson = Invoke-AzureRmResourceAction -Action listKeys -ResourceType "Microsoft.DocumentDb/databaseAccounts" -ApiVersion "2015-04-08" -ResourceGroupName $resourceGroup -Name $DBName
 $dbKeysJson | ConvertTo-Json -depth 100 | Out-File "./OrchestrationDriver/dbKeys.json"
 
+pip3 -r ./OrchestrationDriver/requirements.txt 
 python3 ./OrchestrationDriver/OrchestrationDriver.py -dk ./OrchestrationDriver/dbKeys.json -dn $DBName -sk ./OrchestrationDriver/storKeys.json -sn $storageAccountName
+
+$containerRegistryName ="myContainerRegistry"
+
+#Container Registry Commands (https://github.com/MicrosoftDocs/azure-docs/blob/master/articles/container-registry/container-registry-get-started-powershell.md)
+$registry = New-AzureRMContainerRegistry -ResourceGroupName $resourceGroup -Name $containerRegistryName -EnableAdminUser -Sku Basic -location $location
+
+####Container Build and Registration Section
+docker build ./VisualizationService -t azmlsivizserv:latest
+docker build ./InputService -t azmlsivizserv:latest
+docker build ./Service -t azmlsivizserv:latest
+$creds.Password | docker login $registry.LoginServer -u $creds.Username --password-stdin
