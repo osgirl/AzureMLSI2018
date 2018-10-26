@@ -17,6 +17,7 @@ systems and particularly ML systems
    (https://docs.microsoft.com/en-us/powershell/scripting/setup/installing-powershell-core-on-linux?view=powershell-6#snap-package)
 1. Configure the local powershell for Azure
    (https://docs.microsoft.com/en-us/powershell/azure/install-azurermps-maclinux?view=azurermps-6.11.0)
+   with an additional instruction 'Install-Module -Name AzureRM.Netcore -AllowClobber'
 1. Connect Powershell to the Azure cluster
    (https://docs.microsoft.com/en-us/azure/azure-government/documentation-government-get-started-connect-with-ps)
 1. From inside the connected Powershell terminal, execute the service deployment script 
