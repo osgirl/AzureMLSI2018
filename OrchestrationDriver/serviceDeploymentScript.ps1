@@ -49,6 +49,9 @@ $dbKeysJson | ConvertTo-Json -depth 100 | Out-File "./OrchestrationDriver/dbKeys
 
 pip3 install -r ./OrchestrationDriver/requirements.txt 
 python3 ./OrchestrationDriver/OrchestrationDriver.py -dk ./OrchestrationDriver/dbKeys.json -dn $DBName -sk ./OrchestrationDriver/storKeys.json -sn $storageAccountName
+mv ./VisualizationServiceConfig.json ./VisualizationService/VisualizationServiceConfig.json
+mv ./InputServiceConfig.json ./InputService/InputServiceConfig.json
+mv ./TrainingServiceConfig.json ./TrainingService/TrainingServiceConfig.json
 
 $containerRegistryName ="myContainerRegistry"
 
