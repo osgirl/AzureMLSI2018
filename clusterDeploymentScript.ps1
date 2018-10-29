@@ -10,6 +10,11 @@
 ###Note this script is intended to be run from the root directory of the AZMLSI project, and will not work properly otherwise
 ###
 
+#Connect to the Azure gov't cluster, asuming the necessary dependencies have been installed
+#https://docs.microsoft.com/en-us/azure/azure-government/documentation-government-get-started-connect-with-ps
+
+Connect-AzureRmAccount -EnvironmentName AzureUSGovernment
+
 ####Build parameter section
 #General Account Parameters
 $location = "usgovarizona" #Set to Arizona in order to gain access to the most recent version of the Azure software
@@ -47,19 +52,27 @@ $storageAccountKey | ConvertTo-Json -depth 100 | Out-File "./OrchestrationDriver
 $dbKeysJson = Invoke-AzureRmResourceAction -Action listKeys -ResourceType "Microsoft.DocumentDb/databaseAccounts" -ApiVersion "2015-04-08" -ResourceGroupName $resourceGroup -Name $DBName
 $dbKeysJson | ConvertTo-Json -depth 100 | Out-File "./OrchestrationDriver/dbKeys.json"
 
-pip3 install -r ./OrchestrationDriver/requirements.txt 
-python3 ./OrchestrationDriver/OrchestrationDriver.py -dk ./OrchestrationDriver/dbKeys.json -dn $DBName -sk ./OrchestrationDriver/storKeys.json -sn $storageAccountName
-mv ./VisualizationServiceConfig.json ./VisualizationService/VisualizationServiceConfig.json
-mv ./InputServiceConfig.json ./InputService/InputServiceConfig.json
-mv ./TrainingServiceConfig.json ./TrainingService/TrainingServiceConfig.json
-
+####Generate the container registry
 $containerRegistryName ="myContainerRegistry"
 
 #Container Registry Commands (https://github.com/MicrosoftDocs/azure-docs/blob/master/articles/container-registry/container-registry-get-started-powershell.md)
 $registry = New-AzureRMContainerRegistry -ResourceGroupName $resourceGroup -Name $containerRegistryName -EnableAdminUser -Sku Basic -location $location
 
+####Build the kubernetes cluster for cluster deployment and key distribution
+az group create --name AksKubernetesResourceGroup --location westus2 --output jsonc
+az aks create --resource-group AksKubernetesResourceGroup --name AksKubernetes --agent-count 3 --generate -ssh-keys --output jsonc
+
+#Download dependencies and run the OrchestrationDriver to prep the DB
+pip3 install -r ./OrchestrationDriver/requirements.txt 
+python3 ./OrchestrationDriver/OrchestrationDriver.py -dk ./OrchestrationDriver/dbKeys.json -dn $DBName -sk ./OrchestrationDriver/storKeys.json -sn $storageAccountName
+
+#mv ./VisualizationServiceConfig.json ./VisualizationService/VisualizationServiceConfig.json
+#mv ./InputServiceConfig.json ./InputService/InputServiceConfig.json
+#mv ./TrainingClassificationServiceConfig.json ./TrainingClassificationService/TrainingClassificationServiceConfig.json
+
+
 ####Container Build and Registration Section
 docker build ./VisualizationService -t azmlsivizserv:latest
-docker build ./InputService -t azmlsivizserv:latest
-docker build ./Service -t azmlsivizserv:latest
+#docker build ./InputService -t azmlsiinserv:latest
+#docker build ./TrainingClassificationService -t azmlsitrainclassserv:latest
 $creds.Password | docker login $registry.LoginServer -u $creds.Username --password-stdin

@@ -181,10 +181,10 @@ def generateServiceConfigurationFiles(cfg, db_key, db_name, stor_key, stor_name)
         with their docker container
     '''
     #Add argument parameters to the json dictionaries for the services
-    cfg['dbName'] = db_name
-    cfg['dbKey'] = db_key
-    cfg['storageName'] = stor_name
-    cfg['storageKey'] = stor_key
+    cfg['cosmoDBParams']['cosmoDBName'] = db_name
+    cfg['cosmoDBParams']['cosmoDBKey'] = db_key
+    cfg['cosmoDBParams']['storageName'] = stor_name
+    cfg['cosmoDBParams']['storageKey'] = stor_key
     
     input_service_config_dict = {
         'AzureFileStorageParams':cfg['AzureFileStorageParams'], 
@@ -216,7 +216,7 @@ def main():
     
     print(db_key)
     print(stor_key)
-    generateCosmoDBStructure(cfg, db_name, db_key, ca_file_uri)
+    #generateCosmoDBStructure(cfg, db_name, db_key, ca_file_uri)
     generateServiceConfigurationFiles(cfg, db_key, db_name, stor_key, stor_name)
     
 

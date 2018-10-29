@@ -22,7 +22,7 @@ else:
         'ssl_version': PROTOCOL_TLSv1_2,
         'cert_reqs': CERT_REQUIRED  # Certificates are required and validated
     }
-    auth_provider = PlainTextAuthProvider(username=cosmoCfg['cosmoDBAccount'], password=cosmoCfg['cosmoDBSecret'])
+    auth_provider = PlainTextAuthProvider(username=cosmoCfg['dbName'], password=cosmoCfg['dbKeys'])
     cluster = Cluster([cosmoCfg['cosmoDBEndpointUri']], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
     
 session = cluster.connect(cosmoCfg['cosmoDBKeyspaceName']);   

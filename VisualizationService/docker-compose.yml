@@ -1,0 +1,9 @@
+version: '3'
+services:
+  web:
+    build: .
+    ports:
+    - "5000:5000"
+    - "10350:10350"
+    volumes:
+    - .:/VisualizationService
