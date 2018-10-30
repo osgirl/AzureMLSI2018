@@ -12,7 +12,9 @@ systems and particularly ML systems
 1. Clone the project from GitHub with the command 'git clone https://github.com/booz-allen-hamilton/AzureMLSI2018.git' and 
    navigate to the project root directory in the terminal/CLI
 1. Acquire an Azure subscription on the commercial or gov't cluster with the permissions 
-   needed to generate Storage and CosmosDB accounts
+   needed to generate/access Storage and CosmosDB accounts (note the generation portions of the script can be deactivated 
+   if permissions are not available)
+1. Setup Azure Cloud Shell in your local host environment ()
 1. Setup powershell in your local host environment
    (https://docs.microsoft.com/en-us/powershell/scripting/setup/installing-powershell-core-on-linux?view=powershell-6#snap-package)
 1. Configure the local powershell for Azure
@@ -29,6 +31,11 @@ generate a Azure File Storage Instance with the following
    in structions and arguments (https://docs.microsoft.com/en-us/azure/storage/common/storage-powershell-guide-full)
     1.
 
+###Local Kubernetes Instructions
+Use Minikube for local development and testing, noting the following gotchas
+
+* Minikube has its own IP when trying to access an externalized service (https://stackoverflow.com/questions/46180814/how-to-connect-to-minikube-services-from-outside)
+* Custom docker images must be pushed to the minikub internal docker instance (https://kubernetes.io/docs/tutorials/hello-minikube/)
 
 
 
