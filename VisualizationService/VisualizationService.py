@@ -6,10 +6,20 @@ from ssl import PROTOCOL_TLSv1_2, CERT_REQUIRED
 
 import json
 
+import os
+
 app = Flask(__name__)
  
 cfg = json.load(open("VisualizationServiceConfig.json", "r"))
 cosmoCfg = cfg['cosmoDBParams']
+
+#Retrieve db secrets from the kubernates secret volume
+db_name = open('/tmp/secrets/db_name', 'r').read()
+db_passwd = open('/tmp/secrets/password', 'r').read()
+
+azure_db_domain = "cassandra.cosmosdb.azure.us"
+azure_db_endpoint_uri = db_name + azure_db_domain
+
 if cosmoCfg['localDBEndpoint']:
     #Running the cluster from a local instance without security options engaged
     #https://www.digitalocean.com/community/tutorials/how-to-install-cassandra-and-run-a-single-node-cluster-on-ubuntu-14-04
@@ -22,8 +32,8 @@ else:
         'ssl_version': PROTOCOL_TLSv1_2,
         'cert_reqs': CERT_REQUIRED  # Certificates are required and validated
     }
-    auth_provider = PlainTextAuthProvider(username=cosmoCfg['dbName'], password=cosmoCfg['dbKeys'])
-    cluster = Cluster([cosmoCfg['cosmoDBEndpointUri']], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
+    auth_provider = PlainTextAuthProvider(username=db_name, password=db_passwd)
+    cluster = Cluster([azure_db_endpoint_uri], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
     
 session = cluster.connect(cosmoCfg['cosmoDBKeyspaceName']);   
 
@@ -34,6 +44,7 @@ refinedImageTableName = cosmoCfg['refinedImageTableName']
 
 @app.route('/')
 def serveMainPage():
+    '''
     print("mainpage")
     persona_list = list(session.execute("SELECT persona_name FROM " + personaTableName))
     page_html = ""
@@ -43,7 +54,10 @@ def serveMainPage():
     
     return page_html
     #return 'give me whales or give me death'
-    
+    '''
+    return "hello world" + " " + db_name + " " + db_passwd
+
+'''
 @app.route('/persona/label/<string:persona_name>/<string:img_id>', methods=["POST"])
 def relabelImage(persona_name, img_id):
     print("labeling {0}".format(img_id))
@@ -72,6 +86,6 @@ def servePersonaPage(persona_name):
         page_html += "<div><img src='img/{0}':image/jpeg;base64;+encoded_string></img>{1}<form action='label/{2}/{0}' method='post'><button type='submit'>retrain</button></form></div>".format(image.assoc_image_id, "labeled" if image.label_assoc_flag else "predicted", persona_name)
     
     return page_html
-
+'''
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0')

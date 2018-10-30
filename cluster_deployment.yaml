@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: azmlsi-visualization-deployment
+  labels:
+    app: azmlsi-visualization-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: azmlsi-visualization-deployment
+  template:
+    metadata:
+      labels:
+        app: azmlsi-visualization-deployment
+    spec:
+      containers:
+      - name: azmlsi-visualization
+        image: azmlsi-visualization:1.0.0
+        ports:
+        - containerPort: 5000
+        volumeMounts:
+        - name: secrets
+          mountPath: "/tmp/secrets"
+          readOnly: true
+      volumes:
+      - name: secrets
+        secret:
+            secretName: db-access-credentials
+---
+
+kind: Service
+apiVersion: v1
+metadata:
+  name: azmlsi-visualization-service
+spec:
+  selector:
+    app: azmlsi-visualization-deployment
+  ports:
+  - protocol: TCP
+    port: 5000
+    targetPort: 5000
+  type: LoadBalancer
+  
