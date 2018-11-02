@@ -128,16 +128,13 @@ def generateCosmoDBStructure(cfg, db_name, db_key, ca_file_uri):
             'ssl_version': PROTOCOL_TLSv1_2,
             'cert_reqs': CERT_REQUIRED  # Certificates are required and validated
         }
-        #auth_provider = PlainTextAuthProvider(username=db_name, password=db_key)
-        #cluster = Cluster([endpoint_uri], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
+    auth_provider = PlainTextAuthProvider(username=db_name, password=db_key)
+    cluster = Cluster([endpoint_uri], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
         
-    auth_provider = PlainTextAuthProvider(username="azmlsidb2", password="WlKBifoBflnccsVK1ov8UIIgpwN2alrU7TLEyblJM84W9ify5BiYxPQY716uGfPsJ2eAofLNyxuXitdS0g7zoQ==")
-    cluster = Cluster(["azmlsidb2.cassandra.cosmosdb.azure.us"], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
     
     #Checks to ensure that the demonstration keyspace exists and creates it if not 
     session = cluster.connect()
     
-    '''
     print("\nCreating Keyspace")
     if cfg['localDBEndpointFlag']:
         #Modified local keyspace settings
@@ -174,7 +171,6 @@ def generateCosmoDBStructure(cfg, db_name, db_key, ca_file_uri):
     
     #Raw table stores pre-extraction images that contain at least one face
     session.execute('CREATE TABLE IF NOT EXISTS ' + rawImageTableName + ' (image_id text, refined_image_edge_id text, file_uri text, image_bytes blob, PRIMARY KEY(image_id))');
-    '''
 
 def generateServiceConfigurationFiles(cfg, db_key, db_name, stor_key, stor_name):
     '''
@@ -214,31 +210,33 @@ def main():
     logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
     FORMAT = '%(asctime) %(message)s'
     logging.basicConfig(format=FORMAT)
+    
+    #Check if the blob storage access credentials have been loaded as a secret volume, then look at the environment variables for
+    #testing
+    if os.path.exists('/tmp/secrets/bs_account_name'):
+        bs_account_name = open('/tmp/secrets/bs/bs_account_name').read()
+        bs_account_key = open('/tmp/secrets/bs/bs_account_key').read()
+        logging.debug('Loaded db secrets from secret volume')
+    else: 
+        bs_account_name = os.environ['AZ_BS_ACCOUNT_NAME']
+        bs_account_key = os.environ['AZ_BS_ACCOUNT_KEY']
+        logging.debug('Loaded db secrets from test environment variables')
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-dk')
-    parser.add_argument('-dn')
-    parser.add_argument('-sk')
-    parser.add_argument('-sn')
-    args = parser.parse_args()
-    
-    cfg = json.load(open('./OrchestrationDriverConfig.json', 'r'))
-    #db_key = json.load(open(args.dk[0], 'r'))['primaryMasterKey']
-    db_key = args.dk
-    db_name = args.dn
-    stor_name = args.sn
+    if os.path.exists('/tmp/secrets/db/db_account_name'):
+        db_account_name = open('/tmp/secrets/db/db_account_name').read()
+        db_account_key = open('/tmp/secrets/db/db_account_key').read()
+        logging.debug('Loaded db secrets from secret volume')
+    else:
+        db_account_name = os.environ['AZ_DB_ACCOUNT_NAME']
+        db_account_key = os.environ['AZ_DB_ACCOUNT_KEY']
     stor_dir = os.environ['AZ_BS_TEST_CON']
-    stor_key = args.sk
-    #stor_key = json.load(open(args.sk[0], 'r'))
-    #stor_name = args.sn[0]
-    ca_file_uri = "./baltroot.pem"
-    
+
+    cfg = json.load(open('./OrchestrationDriverConfig.json', 'r'))
+    ca_file_uri = "./cacert.pem"
     source_dir = "./TestImages"
     
-    generateAzureInputStore(stor_name, stor_key, stor_dir, source_dir)
-    #generateCosmoDBStructure(cfg, db_name, db_key, ca_file_uri)
-    #generateServiceConfigurationFiles(cfg, db_key, db_name, stor_key, stor_name)
-    
+    generateAzureInputStore(bs_account_name, bs_account_key, stor_dir, source_dir)
+    generateCosmoDBStructure(cfg, db_account_name, db_account_key, ca_file_uri)
 
 if __name__ == '__main__':
     main()
