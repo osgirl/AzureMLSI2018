@@ -11,9 +11,8 @@ https://github.com/Azure-Samples/container-instances-python-manage
 
 '''
 from utilities import AzureContext
-from azure.storage.file import FileService
-from azure.storage.file import ContentSettings
-from azure.common.credentials import ServicePrincipalCredentials
+from azure.storage.blob import BlockBlobService, PublicAccess
+#from azure.common.credentials import ServicePrincipalCredentials
 
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.containerinstance import ContainerInstanceManagementClient
@@ -31,6 +30,8 @@ from ssl import PROTOCOL_TLSv1_2, CERT_REQUIRED
 import argparse
 
 import os
+import logging
+import sys
 
 import json
 
@@ -74,52 +75,48 @@ def deployDockerContainer():
     
     return None
 
-def create_container_group(client, demoResourceGroupName, name, location, image, memory, cpu):
+def createContainerGroup(client, demoResourceGroupName, name, location, image, memory, cpu):
+    '''
+    
+    '''
+    # setup default values
+    port = 80
+    container_resource_requirements = None
+    command = None
+    environment_variables = None
 
-   # setup default values
-   port = 80
-   container_resource_requirements = None
-   command = None
-   environment_variables = None
+    # set memory and cpu
+    container_resource_requests = ResourceRequests(memory_in_gb = memory, cpu = cpu)
+    container_resource_requirements = ResourceRequirements(requests = container_resource_requests)
 
-   # set memory and cpu
-   container_resource_requests = ResourceRequests(memory_in_gb = memory, cpu = cpu)
-   container_resource_requirements = ResourceRequirements(requests = container_resource_requests)
-   
-   container = Container(name = name,
+    container = Container(name = name,
                          image = image,
                          resources = container_resource_requirements,
                          command = command,
                          ports = [ContainerPort(port=port)],
                          environment_variables = environment_variables)
 
-   # defaults for container group
-   cgroup_os_type = OperatingSystemTypes.linux
-   cgroup_ip_address = IpAddress(type='public', ports = [Port(protocol=ContainerGroupNetworkProtocol.tcp, port = port)])
-   image_registry_credentials = None
-   cgroup = ContainerGroup(location = location, containers = [container], os_type = cgroup_os_type, ip_address = cgroup_ip_address, image_registry_credentials = image_registry_credentials)
-   client.container_groups.create_or_update(demoResourceGroupName, name, cgroup)
+    # defaults for container group
+    cgroup_os_type = OperatingSystemTypes.linux
+    cgroup_ip_address = IpAddress(type='public', ports = [Port(protocol=ContainerGroupNetworkProtocol.tcp, port = port)])
+    image_registry_credentials = None
+    cgroup = ContainerGroup(location = location, containers = [container], os_type = cgroup_os_type, ip_address = cgroup_ip_address, image_registry_credentials = image_registry_credentials)
+    client.container_groups.create_or_update(demoResourceGroupName, name, cgroup)
 
 def delete_resources(demoResourceGroupName, demoContainerGroupName): 
    client.container_groups.delete(demoResourceGroupName, demoContainerGroupName)
    resource_client.resource_groups.delete(demoResourceGroupName)
    
-def generateCosmoDB():
-    '''
-    Programmatically generates the CosmoDB Cassandra instance and retrieves the credentials required to generate a
-    client and impose the required structure
-    '''
-    cosmos_client.session
-
 def generateCosmoDBStructure(cfg, db_name, db_key, ca_file_uri):
     '''
     Prepares the CosmoDB Cassandra instance for the demonstration by imposing the required keyspace and table structure
     '''
     
     endpoint_uri = db_name + '.cassandra.cosmosdb.azure.us'
+    logging.debug("Connecting to CosmosDB Cassandra using {0} {1} {2} {3}".format(db_name, db_key, endpoint_uri, os.path.exists(ca_file_uri)))
     
     cfg = cfg['cosmoDBParams']
-    if cfg['localDBEndpoint']:
+    if cfg['localDBEndpointFlag']:
         #Running the cluster from a local instance without security options engaged
         #https://www.digitalocean.com/community/tutorials/how-to-install-cassandra-and-run-a-single-node-cluster-on-ubuntu-14-04
         cluster = Cluster()
@@ -131,13 +128,18 @@ def generateCosmoDBStructure(cfg, db_name, db_key, ca_file_uri):
             'ssl_version': PROTOCOL_TLSv1_2,
             'cert_reqs': CERT_REQUIRED  # Certificates are required and validated
         }
-        auth_provider = PlainTextAuthProvider(username=db_name, password=db_key)
-        cluster = Cluster([endpoint_uri], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
+        #auth_provider = PlainTextAuthProvider(username=db_name, password=db_key)
+        #cluster = Cluster([endpoint_uri], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
         
+    auth_provider = PlainTextAuthProvider(username="azmlsidb2", password="WlKBifoBflnccsVK1ov8UIIgpwN2alrU7TLEyblJM84W9ify5BiYxPQY716uGfPsJ2eAofLNyxuXitdS0g7zoQ==")
+    cluster = Cluster(["azmlsidb2.cassandra.cosmosdb.azure.us"], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
+    
     #Checks to ensure that the demonstration keyspace exists and creates it if not 
     session = cluster.connect()
+    
+    '''
     print("\nCreating Keyspace")
-    if cfg['localDBEndpoint']:
+    if cfg['localDBEndpointFlag']:
         #Modified local keyspace settings
         session.execute('CREATE KEYSPACE IF NOT EXISTS ' + cfg['cosmoDBKeyspaceName'] + ' WITH replication = {\'class\' : \'SimpleStrategy\', \'replication_factor\' : 1 }')
         session.shutdown()
@@ -172,7 +174,7 @@ def generateCosmoDBStructure(cfg, db_name, db_key, ca_file_uri):
     
     #Raw table stores pre-extraction images that contain at least one face
     session.execute('CREATE TABLE IF NOT EXISTS ' + rawImageTableName + ' (image_id text, refined_image_edge_id text, file_uri text, image_bytes blob, PRIMARY KEY(image_id))');
-
+    '''
 
 def generateServiceConfigurationFiles(cfg, db_key, db_name, stor_key, stor_name):
     '''
@@ -180,11 +182,6 @@ def generateServiceConfigurationFiles(cfg, db_key, db_name, stor_key, stor_name)
         resource generation process to produce the VisualizationService, InputService and RetrainingService config files to be bundled
         with their docker container
     '''
-    #Add argument parameters to the json dictionaries for the services
-    cfg['cosmoDBParams']['cosmoDBName'] = db_name
-    cfg['cosmoDBParams']['cosmoDBKey'] = db_key
-    cfg['cosmoDBParams']['storageName'] = stor_name
-    cfg['cosmoDBParams']['storageKey'] = stor_key
     
     input_service_config_dict = {
         'AzureFileStorageParams':cfg['AzureFileStorageParams'], 
@@ -199,46 +196,54 @@ def generateServiceConfigurationFiles(cfg, db_key, db_name, stor_key, stor_name)
     with open('./VisualizationServiceConfig.json', 'w') as write_file:
         json.dump(input_service_config_dict, write_file)
 
+def generateAzureInputStore(stor_name, stor_key, dir_name, source_dir):
+    '''
+    Loads a folder of images with the appropriate filenames into the Azure Blob Storage dir so they are accessible to Input
+    workers running in the cloud
+    '''
+    block_blob_service = BlockBlobService(account_name=stor_name, account_key=stor_key, endpoint_suffix="core.usgovcloudapi.net")
+    block_blob_service.create_container(dir_name)
+    logging.debug("Connected to blob service {0}".format(stor_name))
+
+    for dir_path, dirNames, file_names in os.walk(source_dir):
+        for file_name in file_names:
+            block_blob_service.create_blob_from_path(dir_name, file_name, dir_path + "/" + file_name)
+            logging.debug("File written to blob container {0} from {0} {1}".format(dir_path, file_name))
+
 def main():
+    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+    FORMAT = '%(asctime) %(message)s'
+    logging.basicConfig(format=FORMAT)
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('-dk', nargs=1)
-    parser.add_argument('-dn', nargs=1)
-    parser.add_argument('-sk', nargs=1)
+    parser.add_argument('-dk')
+    parser.add_argument('-dn')
+    parser.add_argument('-sk')
     parser.add_argument('-sn')
     args = parser.parse_args()
     
-    cfg = json.load(open('./OrchestrationDriver/OrchestrationDriverConfig.json', 'r'))
-    db_key = json.load(open(args.dk[0], 'r'))['primaryMasterKey']
-    db_name = args.dn[0]
-    stor_key = json.load(open(args.sk[0], 'r'))
-    stor_name = args.sn[0]
-    ca_file_uri = "./OrchestrationDriver/cacert.pem"
+    cfg = json.load(open('./OrchestrationDriverConfig.json', 'r'))
+    #db_key = json.load(open(args.dk[0], 'r'))['primaryMasterKey']
+    db_key = args.dk
+    db_name = args.dn
+    stor_name = args.sn
+    stor_dir = os.environ['AZ_BS_TEST_CON']
+    stor_key = args.sk
+    #stor_key = json.load(open(args.sk[0], 'r'))
+    #stor_name = args.sn[0]
+    ca_file_uri = "./baltroot.pem"
     
-    print(db_key)
-    print(stor_key)
+    source_dir = "./TestImages"
+    
+    generateAzureInputStore(stor_name, stor_key, stor_dir, source_dir)
     #generateCosmoDBStructure(cfg, db_name, db_key, ca_file_uri)
-    generateServiceConfigurationFiles(cfg, db_key, db_name, stor_key, stor_name)
+    #generateServiceConfigurationFiles(cfg, db_key, db_name, stor_key, stor_name)
     
 
 if __name__ == '__main__':
     main()
     
-    #generateCosmoDBStructure(cfg)
-    #generateServiceConfigurationFiles(cfg)
     '''
-    fileService = FileService(account_name=cfg.fileStorageAccountName, account_key=cfg.fileStorageSecret)
-    fileService.create_share(cfg.fileStorageShareName)
-    fileService.create_directory(cfg.fileStorageShareName, cfg.fileStorageDir)
-    
-    #This will arbitrarily copy the contents of a system folder to the Azure file storage
-    for dirPath, dirNames, fileNames in os.walk("testDataFolder"):
-        for fileName in fileNames:
-            fileHandle = open(dirPath + "/" + fileName) #TODO make more robust with a non-OS specific seperator
-            fileService.create_file_from_path(cfg.fileStorageShareName, cfg.fileStorageDir, fileName, dirPath + "/" + fileName)
-            fileHandle.close()
-    
-    cleanupAccountDir(fileService, cfg.fileStorageShareName, cfg.fileStorageDir)
-    
     #Uses a bit of stub code provided by Azure with credentials collected using the following
     #https://docs.microsoft.com/en-us/azure/azure-resource-manager/resource-group-create-service-principal-portal
     azure_context = AzureContext(
@@ -257,7 +262,7 @@ if __name__ == '__main__':
 
     #Generate resource group and adds a container group to it in preperation for the cluster launch
     resource_client.resource_groups.create_or_update(cfg.demoResourceGroupName, {'location': location})
-    create_container_group(client = client, demoResourceGroupName = cfg.demoResourceGroupName, 
+    createContainerGroup(client = client, demoResourceGroupName = cfg.demoResourceGroupName, 
         name = cfg.demoContainerGroupName, 
         location = location, 
         image = "microsoft/aci-helloworld", 

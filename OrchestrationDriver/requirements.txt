@@ -1,4 +1,5 @@
 azure-storage-file>=1.0
+azure-storage-blob>=1.0
 azure-common>=1.1.15
 azure-mgmt-containerregistry>=1.0
 azure-mgmt-resource>=1.1.0

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: azmlsi-bs-config
+data:
+  # property-like keys
+  az-bs-test-dir: "test-data-con"

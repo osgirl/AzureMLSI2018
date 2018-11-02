@@ -1,3 +1,63 @@
+### Input deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: azmlsi-input-dpmt
+  labels:
+    app: azmlsi-input-dpmt
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: azmlsi-input-dpmt
+  template:
+    metadata:
+      labels:
+        app: azmlsi-input-dpmt
+    spec:
+      containers:
+      - name: azmlsi-input
+        image: azmlsi-input:1.0.0
+        tty: true
+        env:
+        # consume the property-like keys in environment variables
+        - name: AZ_BS_TEST_CON
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-bs-config
+              key: az-bs-test-dir
+        ports:
+        - containerPort: 10350
+          name: azure-cosmo-db
+        - containerPort: 80
+          name: azure-file-str
+        volumeMounts:
+        - name: bs-secrets
+          mountPath: "/tmp/secrets/bs"
+          readOnly: true
+        - name: db-secrets
+          mountPath: "/tmp/secrets/db"
+          readOnly: true
+      volumes:
+      - name: secrets
+        secret:
+            secretName: bs-access-credentials
+            secretName: db-access-credentials
+---
+# Input service
+kind: Service
+apiVersion: v1
+metadata:
+  name: azmlsi-input-svc
+spec:
+  selector:
+    app: azmlsi-input-dpmt
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+---
+### Visualization Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,14 +81,14 @@ spec:
         - containerPort: 5000
         volumeMounts:
         - name: secrets
-          mountPath: "/tmp/secrets"
+          mountPath: "/tmp/secrets/db"
           readOnly: true
       volumes:
       - name: secrets
         secret:
             secretName: db-access-credentials
 ---
-
+### Visualization Service
 kind: Service
 apiVersion: v1
 metadata:

@@ -2,8 +2,7 @@
     This script runs once upon initial instantiation of the container to load the test data.
     The container can be run without running this script. 
 '''
-from azure.storage.file import FileService
-from azure.storage.file import ContentSettings
+from azure.storage.blob import BlockBlobService, PublicAccess
 from cassandra.cluster import Cluster
 from cassandra.auth import PlainTextAuthProvider
 from ssl import PROTOCOL_TLSv1_2, CERT_REQUIRED
@@ -14,6 +13,9 @@ import os
 import hashlib
 
 import json
+
+import logging
+import sys
 
 def testPopulateCassandraTables(session, cosmoCfg):
     '''
@@ -62,14 +64,51 @@ def testPopulateCassandraTables(session, cosmoCfg):
             #fileService.create_file_from_path(cosmoCfg.fileStorageShareName, cosmoCfg.fileStorageDir, fileName, dirPath + "/" + fileName)
             fileHandle.close()
 
+def main ():
+    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+    FORMAT = '%(asctime) %(message)s'
+    logging.basicConfig(format=FORMAT)
+    
+    #Load the Azure File storage credentials from the secret volume
+    
+    #Check if the blob storage access credentials have been loaded as a secret volume, then look at the environment variables for
+    #testing
+    if os.path.exists('/tmp/secrets/bs_account_name'):
+        account_name = open('/tmp/secrets/bs/bs_account_name').read()
+        account_key = open('/tmp/secrets/bs/bs_account_key').read()
+        logging.debug('Loaded bs secrets from secret volume')
+    else: 
+        account_name = os.environ['AZ_BS_ACCOUNT_NAME']
+        account_key = os.environ['AZ_BS_ACCOUNT_KEY']
+        logging.debug('Loaded bs secrets from test environment variables')
+    #Check if the blob storage access credentials have been loaded as a secret volume, then look at the environment variables for
+    #testing
+    #if os.path.exists('/tmp/secrets/db/db_account_name'):
+    container_name = os.environ['AZ_BS_TEST_CON']
+    
+    blob_service = BlockBlobService(account_name=account_name, account_key=account_key, endpoint_suffix="core.usgovcloudapi.net")
+    logging.debug("Created blob service client using {0} account {1} container".format(account_name, container_name))
+
+    blobs = blob_service.list_blobs(container_name)
+    logging.debug("Grabbed blob list in container {0}".format(container_name));
+    
+    #Selects a sample of test data to test the parallelization of the ingest
+    choice_blobs = random.choices(list(blobs), k=20)
+    
+    #Generates additional traffic to the DB by repeatedly ingesting the selected sample of test data
+    for x in range(0, 10):
+        for blob in choice_blobs:
+                blobBytes = blob_service.get_blob_to_bytes(container_name, blob.name)
+                blob_bytes = logging.debug("Grabbed blob {0}".format(blob.name))
+    
+    
 if __name__ == '__main__':
     '''
-    fileService = FileService(account_name=cosmoCfg[fileAccountName], account_key=cosmoCfg[fileAccountSecret])
 
-    #Get 
-    for file in fileService.list_directories_and_files(cosmoCfg[shareName], cosmoCfg[dirName]):
-        print(file.name)
 
+    '''
+    main()
+    
     '''
     cfg = json.load(open("InputServiceConfig.json", "r"))
     cosmoCfg = cfg['cosmoDBParams']
@@ -99,3 +138,4 @@ if __name__ == '__main__':
         print(persona.persona_name)
     
     session.shutdown()
+    '''

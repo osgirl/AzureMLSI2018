@@ -2,6 +2,7 @@ FROM python:3
 COPY . /VisualizationService
 WORKDIR /VisualizationService
 RUN ls .
-RUN pip install -r requirements.txt
+#CASS_DRIVER_NO_CYTHON speeds up compilation for testin
+RUN CASS_DRIVER_NO_CYTHON=1 pip install -r requirements.txt
 ENTRYPOINT ["python"]
 CMD ["VisualizationService.py"]

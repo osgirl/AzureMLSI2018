@@ -1,3 +1,4 @@
 Flask>=1.0.0
 azure-cosmos>=1.0.0
 cassandra-driver>=1.0.0
+azure-storage-file>=1.0
