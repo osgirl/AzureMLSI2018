@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: azmlsi-db-config
+data:
+  # property-like keys
+  db-keyspace: test-data-con
+  db-persona-table: persona_table
+  db-persona-edge-table: persona_edge_table
+  db-raw-image-table: raw_image_table
+  db-refined-image-table: refined_image_table

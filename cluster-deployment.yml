@@ -41,8 +41,8 @@ spec:
       volumes:
       - name: secrets
         secret:
-            secretName: bs-access-credentials
-            secretName: db-access-credentials
+            secretName: bs-secrets
+            secretName: db-secrets
 ---
 # Input service
 kind: Service
@@ -76,17 +76,27 @@ spec:
     spec:
       containers:
       - name: azmlsi-visualization
-        image: azmlsi-visualization:1.0.0
+        image: mycontainerregistry.azurecr.us/viz-service
+        imagePullSecrets:
+            - name: image-pull-secret
+        tty: true
+        env:
+        # consume the property-like keys in environment variables
+        - name: COSMOSDB_KEYSPACE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-keyspace
         ports:
         - containerPort: 5000
         volumeMounts:
-        - name: secrets
+        - name: db-secrets
           mountPath: "/tmp/secrets/db"
           readOnly: true
       volumes:
       - name: secrets
         secret:
-            secretName: db-access-credentials
+            secretName: db-secrets
 ---
 ### Visualization Service
 kind: Service

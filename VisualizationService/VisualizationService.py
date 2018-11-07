@@ -11,37 +11,35 @@ import os
 app = Flask(__name__)
  
 cfg = json.load(open("VisualizationServiceConfig.json", "r"))
-cosmoCfg = cfg['cosmoDBParams']
 
 #Retrieve db secrets from the kubernates secret volume
-db_name = open('/tmp/secrets/db_name', 'r').read()
-db_passwd = open('/tmp/secrets/password', 'r').read()
+db_name = open('/tmp/secrets/db/db-account', 'r').read()
+db_passwd = open('/tmp/secrets/db/db-key', 'r').read()
 
 azure_db_domain = "cassandra.cosmosdb.azure.us"
 azure_db_endpoint_uri = db_name + azure_db_domain
 
-if cosmoCfg['localDBEndpoint']:
-    #Running the cluster from a local instance without security options engaged
-    #https://www.digitalocean.com/community/tutorials/how-to-install-cassandra-and-run-a-single-node-cluster-on-ubuntu-14-04
-    cluster = Cluster()
-else:
-    #Cassandra connection options for the Azure CosmoDB with Cassandra API from the quickstart documentation on the portal page
-    #grabbed my CA.pem from Mozilla https://curl.haxx.se/docs/caextract.html
-    ssl_opts = {
-        'ca_certs': './cacert.pem',
-        'ssl_version': PROTOCOL_TLSv1_2,
-        'cert_reqs': CERT_REQUIRED  # Certificates are required and validated
-    }
-    auth_provider = PlainTextAuthProvider(username=db_name, password=db_passwd)
-    cluster = Cluster([azure_db_endpoint_uri], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
+#Cassandra connection options for the Azure CosmoDB with Cassandra API from the quickstart documentation on the portal page
+#grabbed my CA.pem from Mozilla https://curl.haxx.se/docs/caextract.html
+ssl_opts = {
+    'ca_certs': './cacert.pem',
+    'ssl_version': PROTOCOL_TLSv1_2,
+    'cert_reqs': CERT_REQUIRED  # Certificates are required and validated
+}
+auth_provider = PlainTextAuthProvider(username=db_name, password=db_passwd)
+cluster = Cluster([azure_db_endpoint_uri], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
     
-session = cluster.connect(cosmoCfg['cosmoDBKeyspaceName']);   
+cosmos_keyspace = os.environ['COSMOSDB_KEYSPACE']
+    
+session = cluster.connect(cosmos_keyspace)
 
-personaTableName = cosmoCfg['personaTableName']
+'''
+personaTableName = os.environ['']
+cosmoCfg['personaTableName']
 personaEdgeTableName = cosmoCfg['personaEdgeTableName']
 rawImageTableName = cosmoCfg['rawImageTableName']
 refinedImageTableName = cosmoCfg['refinedImageTableName']
-
+'''
 @app.route('/')
 def serveMainPage():
     '''
@@ -55,7 +53,7 @@ def serveMainPage():
     return page_html
     #return 'give me whales or give me death'
     '''
-    return "hello world" + " " + db_name + " " + db_passwd
+    return "hello world {0} {1} {2}".format(db_name, db_passwd, cosmos_keyspace) 
 
 '''
 @app.route('/persona/label/<string:persona_name>/<string:img_id>', methods=["POST"])
