@@ -5,13 +5,17 @@ from cassandra.auth import PlainTextAuthProvider
 from ssl import PROTOCOL_TLSv1_2, CERT_REQUIRED
 
 import json
+import logging
 
 import os
+import sys
+
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+FORMAT = '%(asctime) %(message)s'
+logging.basicConfig(format=FORMAT) 
 
 app = Flask(__name__)
  
-cfg = json.load(open("VisualizationServiceConfig.json", "r"))
-
 #Retrieve db secrets from the kubernates secret volume
 db_name = open('/tmp/secrets/db/db-account', 'r').read()
 db_passwd = open('/tmp/secrets/db/db-key', 'r').read()
@@ -31,6 +35,7 @@ cluster = Cluster([azure_db_endpoint_uri], port = 10350, auth_provider=auth_prov
     
 cosmos_keyspace = os.environ['COSMOSDB_KEYSPACE']
     
+logging.debug("Attempting to connect to CosmosDB with the following credentials {0}, {1}".format(azure_db_endpoint_uri, db_name)) 
 session = cluster.connect(cosmos_keyspace)
 
 '''
