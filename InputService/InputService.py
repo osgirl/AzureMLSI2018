@@ -11,9 +11,7 @@ import random
 import os
 
 import hashlib
-
 import json
-
 import logging
 import sys
 
@@ -52,22 +50,13 @@ def testPopulateCassandraTables(choice_blobs, db_account_name, db_account_key, c
     auth_provider = PlainTextAuthProvider(username=db_account_name, password=db_account_key)
     endpoint_uri = db_account_name + '.cassandra.cosmosdb.azure.us'
     cluster = Cluster([endpoint_uri], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
-    
-    
 
-    personaTableName = os.environ['AZ_DB_PERSONA_TABLE']
-    personaEdgeTableName = os.environ['AZ_DB_PERSONA_EDGE_TABLE']
-    rawImageTableName = os.environ['AZ_DB_RAW_IMAGE_TABLE']
-    refinedImageTableName = os.environ['AZ_DB_REFINED_IMAGE_TABLE']
+    personaTableName = os.environ['DB_PERSONA_TABLE']
+    personaEdgeTableName = os.environ['DB_PERSONA_EDGE_TABLE']
+    rawImageTableName = os.environ['DB_RAW_IMAGE_TABLE']
+    refinedImageTableName = os.environ['DB_REFINED_IMAGE_TABLE']
 
-    '''
-    cosmoCfg = cosmoCfg['']
-    personaTableName = cosmoCfg['personaTableName']
-    personaEdgeTableName = cosmoCfg['personaEdgeTableName']
-    rawImageTableName = cosmoCfg['rawImageTableName']
-    refinedImageTableName = cosmoCfg['refinedImageTableName']
-    '''
-    session = cluster.connect(os.environ['AZ_DB_KEYSPACE']);   
+    session = cluster.connect(os.environ['DB_KEYSPACE']);   
 
     #Iterates through labeled presidential images in a provided directory, extracts the label from 
     #the filename, and adds them as (randomly) labeled or unlabeled to the database
@@ -83,7 +72,6 @@ def testPopulateCassandraTables(choice_blobs, db_account_name, db_account_key, c
         choice = random.choice((0,1,2))
         
         #For each image extract the label and use to generate a persona, redundant writes will cancel out
-        print(blob_bytes)
         image_bytes = blob_bytes;
         hashed_bytes = hashlib.md5(image_bytes).digest()
         hashed_bytes_int = int.from_bytes(hashed_bytes, byteorder='big') #Good identifier, sadly un
@@ -111,30 +99,26 @@ def main ():
     
     #Check if the blob storage access credentials have been loaded as a secret volume, then look at the environment variables for
     #testing
-    if os.path.exists('/tmp/secrets/bs_account_name'):
-        bs_account_name = open('/tmp/secrets/bs/bs_account_name').read()
-        bs_account_key = open('/tmp/secrets/bs/bs_account_key').read()
+    if os.path.exists('/tmp/secrets/bs/blob-storage-account'):
+        bs_account_name = open('/tmp/secrets/bs/blob-storage-account').read()
+        bs_account_key = open('/tmp/secrets/bs/blob-storage-key').read()
         logging.debug('Loaded db secrets from secret volume')
     else: 
         bs_account_name = os.environ['AZ_BS_ACCOUNT_NAME']
         bs_account_key = os.environ['AZ_BS_ACCOUNT_KEY']
         logging.debug('Loaded db secrets from test environment variables')
 
-    if os.path.exists('/tmp/secrets/db/db_account_name'):
-        db_account_name = open('/tmp/secrets/db/db_account_name').read()
-        db_account_key = open('/tmp/secrets/db/db_account_key').read()
+    if os.path.exists('/tmp/secrets/db/db-account'):
+        db_account_name = open('/tmp/secrets/db/db-account').read()
+        db_account_key = open('/tmp/secrets/db/db-key').read()
         logging.debug('Loaded db secrets from secret volume')
     else:
         db_account_name = os.environ['AZ_DB_ACCOUNT_NAME']
         db_account_key = os.environ['AZ_DB_ACCOUNT_KEY']
-    bs_test_container = os.environ['AZ_BS_TEST_CON']
+    bs_test_container = os.environ['BS_TEST_CON']
     
     ca_file_uri = "./cacert.pem"
 
-    #Check if the blob storage access credentials have been loaded as a secret volume, then look at the environment variables for
-    #testing
-    #if os.path.exists('/tmp/secrets/db/db_account_name'):
-    container_name = os.environ['AZ_BS_TEST_CON']
     choice_blobs = retrieveTestImageSample(bs_account_name, bs_account_key, bs_test_container)
     testPopulateCassandraTables(choice_blobs, db_account_name, db_account_key, ca_file_uri)
     

@@ -35,6 +35,8 @@ import sys
 
 import json
 
+import yaml
+
 from azure.cosmos.cosmos_client import CosmosClient
 
 
@@ -107,27 +109,24 @@ def delete_resources(demoResourceGroupName, demoContainerGroupName):
    client.container_groups.delete(demoResourceGroupName, demoContainerGroupName)
    resource_client.resource_groups.delete(demoResourceGroupName)
    
-def generateCosmoDBStructure(cfg, db_name, db_key, ca_file_uri):
+def generateCosmoDBStructure(db_config, db_name, db_key, ca_file_uri):
     '''
     Prepares the CosmoDB Cassandra instance for the demonstration by imposing the required keyspace and table structure
     '''
     
+    db_config = db_config['data']
+    db_keyspace = db_config['db-keyspace']
+    
     endpoint_uri = db_name + '.cassandra.cosmosdb.azure.us'
     logging.debug("Connecting to CosmosDB Cassandra using {0} {1} {2} {3}".format(db_name, db_key, endpoint_uri, os.path.exists(ca_file_uri)))
-    
-    cfg = cfg['cosmoDBParams']
-    if cfg['localDBEndpointFlag']:
-        #Running the cluster from a local instance without security options engaged
-        #https://www.digitalocean.com/community/tutorials/how-to-install-cassandra-and-run-a-single-node-cluster-on-ubuntu-14-04
-        cluster = Cluster()
-    else:
-        #Cassandra connection options for the Azure CosmoDB with Cassandra API from the quickstart documentation on the portal page
-        #grabbed my CA.pem from Mozilla https://curl.haxx.se/docs/caextract.html
-        ssl_opts = {
-            'ca_certs': ca_file_uri,
-            'ssl_version': PROTOCOL_TLSv1_2,
-            'cert_reqs': CERT_REQUIRED  # Certificates are required and validated
-        }
+
+    #Cassandra connection options for the Azure CosmoDB with Cassandra API from the quickstart documentation on the portal page
+    #grabbed my CA.pem from Mozilla https://curl.haxx.se/docs/caextract.html
+    ssl_opts = {
+        'ca_certs': ca_file_uri,
+        'ssl_version': PROTOCOL_TLSv1_2,
+        'cert_reqs': CERT_REQUIRED  # Certificates are required and validated
+    }
     auth_provider = PlainTextAuthProvider(username=db_name, password=db_key)
     cluster = Cluster([endpoint_uri], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
         
@@ -136,20 +135,15 @@ def generateCosmoDBStructure(cfg, db_name, db_key, ca_file_uri):
     session = cluster.connect()
     
     print("\nCreating Keyspace")
-    if cfg['localDBEndpointFlag']:
-        #Modified local keyspace settings
-        session.execute('CREATE KEYSPACE IF NOT EXISTS ' + cfg['cosmoDBKeyspaceName'] + ' WITH replication = {\'class\' : \'SimpleStrategy\', \'replication_factor\' : 1 }')
-        session.shutdown()
-    else:
-        #Default keyspace settings from Azure CosmoDB
-        session.execute('CREATE KEYSPACE IF NOT EXISTS ' + cfg['cosmoDBKeyspaceName'] + ' WITH replication = {\'class\': \'NetworkTopologyStrategy\', \'datacenter\' : 1 }'); #Formatting is stupid on this string due to the additional curley braces
+    #Default keyspace settings from Azure CosmoDB
+    session.execute('CREATE KEYSPACE IF NOT EXISTS ' + db_keyspace + ' WITH replication = {\'class\': \'NetworkTopologyStrategy\', \'datacenter\' : 1 }'); #Formatting is stupid on this string due to the additional curley braces
     
-    session = cluster.connect(cfg['cosmoDBKeyspaceName']);   
+    session = cluster.connect(db_keyspace);   
 
-    personaTableName = cfg['personaTableName']
-    personaEdgeTableName = cfg['personaEdgeTableName']
-    rawImageTableName = cfg['rawImageTableName']
-    refinedImageTableName = cfg['refinedImageTableName']
+    personaTableName = db_config['db-persona-table']
+    personaEdgeTableName = db_config['db-persona-edge-table']
+    rawImageTableName = db_config['db-raw-image-table'] 
+    refinedImageTableName = db_config['db-refined-image-table'] 
 
     #Create table
     print("\nCreating Table")
@@ -192,11 +186,14 @@ def generateServiceConfigurationFiles(cfg, db_key, db_name, stor_key, stor_name)
     with open('./VisualizationServiceConfig.json', 'w') as write_file:
         json.dump(input_service_config_dict, write_file)
 
-def generateAzureInputStore(stor_name, stor_key, dir_name, source_dir):
+def generateAzureInputStore(bs_config, stor_name, stor_key, source_dir):
     '''
     Loads a folder of images with the appropriate filenames into the Azure Blob Storage dir so they are accessible to Input
     workers running in the cloud
     '''
+    
+    dir_name = bs_config['data']['az-bs-test-dir']
+    
     block_blob_service = BlockBlobService(account_name=stor_name, account_key=stor_key, endpoint_suffix="core.usgovcloudapi.net")
     block_blob_service.create_container(dir_name)
     logging.debug("Connected to blob service {0}".format(stor_name))
@@ -213,30 +210,25 @@ def main():
     
     #Check if the blob storage access credentials have been loaded as a secret volume, then look at the environment variables for
     #testing
-    if os.path.exists('/tmp/secrets/bs_account_name'):
-        bs_account_name = open('/tmp/secrets/bs/bs_account_name').read()
-        bs_account_key = open('/tmp/secrets/bs/bs_account_key').read()
-        logging.debug('Loaded db secrets from secret volume')
-    else: 
-        bs_account_name = os.environ['AZ_BS_ACCOUNT_NAME']
-        bs_account_key = os.environ['AZ_BS_ACCOUNT_KEY']
-        logging.debug('Loaded db secrets from test environment variables')
+    
+    db_account_name = os.environ['DB_ACCOUNT']
+    db_account_key = os.environ['DB_KEY']
+    
+    bs_account_name = os.environ['BLOB_STORAGE_ACCOUNT']
+    bs_account_key = os.environ['BLOB_STORAGE_KEY']
 
-    if os.path.exists('/tmp/secrets/db/db_account_name'):
-        db_account_name = open('/tmp/secrets/db/db_account_name').read()
-        db_account_key = open('/tmp/secrets/db/db_account_key').read()
-        logging.debug('Loaded db secrets from secret volume')
-    else:
-        db_account_name = os.environ['AZ_DB_ACCOUNT_NAME']
-        db_account_key = os.environ['AZ_DB_ACCOUNT_KEY']
-    stor_dir = os.environ['AZ_BS_TEST_CON']
+    db_config_uri = os.environ['DB_CONFIG_URI']
+    db_config = yaml.safe_load(open(db_config_uri))
+    
+    bs_config_uri = os.environ['BS_CONFIG_URI']
+    bs_config = yaml.safe_load(open(bs_config_uri))
 
-    cfg = json.load(open('./OrchestrationDriverConfig.json', 'r'))
+    #cfg = json.load(open('./OrchestrationDriverConfig.json', 'r'))
     ca_file_uri = "./cacert.pem"
     source_dir = "./TestImages"
     
-    generateAzureInputStore(bs_account_name, bs_account_key, stor_dir, source_dir)
-    generateCosmoDBStructure(cfg, db_account_name, db_account_key, ca_file_uri)
+    generateAzureInputStore(bs_config, bs_account_name, bs_account_key, source_dir)
+    generateCosmoDBStructure(db_config, db_account_name, db_account_key, ca_file_uri)
 
 if __name__ == '__main__':
     main()

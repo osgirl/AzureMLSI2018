@@ -20,7 +20,7 @@ app = Flask(__name__)
 db_name = open('/tmp/secrets/db/db-account', 'r').read()
 db_passwd = open('/tmp/secrets/db/db-key', 'r').read()
 
-azure_db_domain = "cassandra.cosmosdb.azure.us"
+azure_db_domain = ".cassandra.cosmosdb.azure.us"
 azure_db_endpoint_uri = db_name + azure_db_domain
 
 #Cassandra connection options for the Azure CosmoDB with Cassandra API from the quickstart documentation on the portal page
@@ -35,16 +35,14 @@ cluster = Cluster([azure_db_endpoint_uri], port = 10350, auth_provider=auth_prov
     
 cosmos_keyspace = os.environ['COSMOSDB_KEYSPACE']
     
-logging.debug("Attempting to connect to CosmosDB with the following credentials {0}, {1}".format(azure_db_endpoint_uri, db_name)) 
+logging.debug("Attempting to connect to CosmosDB with the following credentials {0}, {1}".format(azure_db_endpoint_uri, db_name, cosmos_keyspace)) 
 session = cluster.connect(cosmos_keyspace)
 
-'''
-personaTableName = os.environ['']
-cosmoCfg['personaTableName']
-personaEdgeTableName = cosmoCfg['personaEdgeTableName']
-rawImageTableName = cosmoCfg['rawImageTableName']
-refinedImageTableName = cosmoCfg['refinedImageTableName']
-'''
+persona_table = os.environ['DB_PERSONA_TABLE']
+persona_edge_table = os.environ['DB_PERSONA_EDGE_TABLE']
+raw_image_table = os.environ['DB_RAW_IMAGE_TABLE']
+refined_image_table = os.environ['DB_REFINED_IMAGE_TABLE']
+
 @app.route('/')
 def serveMainPage():
     '''
@@ -58,7 +56,7 @@ def serveMainPage():
     return page_html
     #return 'give me whales or give me death'
     '''
-    return "hello world {0} {1} {2}".format(db_name, db_passwd, cosmos_keyspace) 
+    return "hello world {0} {1} {2} {3}".format(db_name, db_passwd, cosmos_keyspace, persona_table) 
 
 '''
 @app.route('/persona/label/<string:persona_name>/<string:img_id>', methods=["POST"])

@@ -1,3 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: azmlsi-db-config
+data:
+  # property-like keys
+  db-keyspace: az_ml_si_keyspace
+  db-persona-table: persona_table
+  db-persona-edge-table: persona_edge_table
+  db-raw-image-table: raw_image_table
+  db-refined-image-table: refined_image_table
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: azmlsi-bs-config
+data:
+  # property-like keys
+  az-bs-test-dir: "test-data-con"
+---
 ### Input deployment
 apiVersion: apps/v1
 kind: Deployment
@@ -17,15 +37,40 @@ spec:
     spec:
       containers:
       - name: azmlsi-input
-        image: azmlsi-input:1.0.0
+        image: mycontainerregistry.azurecr.us/input-service
         tty: true
         env:
         # consume the property-like keys in environment variables
-        - name: AZ_BS_TEST_CON
+        - name: BS_TEST_CON
           valueFrom:
             configMapKeyRef:
               name: azmlsi-bs-config
               key: az-bs-test-dir
+        - name: DB_KEYSPACE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-keyspace
+        - name: DB_PERSONA_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-persona-table
+        - name: DB_PERSONA_EDGE_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-persona-edge-table
+        - name: DB_RAW_IMAGE_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-raw-image-table
+        - name: DB_REFINED_IMAGE_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-refined-image-table
         ports:
         - containerPort: 10350
           name: azure-cosmo-db
@@ -38,10 +83,14 @@ spec:
         - name: db-secrets
           mountPath: "/tmp/secrets/db"
           readOnly: true
+      imagePullSecrets:
+        - name: image-pull-secrets
       volumes:
-      - name: secrets
+      - name: bs-secrets
         secret:
             secretName: bs-secrets
+      - name: db-secrets
+        secret:
             secretName: db-secrets
 ---
 # Input service
@@ -56,6 +105,12 @@ spec:
   - protocol: TCP
     port: 80
     targetPort: 80
+    name: azure-file-str
+  - protocol: TCP
+    port: 10350
+    targetPort: 10350
+    name: azure-cosmos-db
+  
 ---
 ### Visualization Deployment
 apiVersion: apps/v1
@@ -75,10 +130,9 @@ spec:
         app: azmlsi-visualization-deployment
     spec:
       containers:
-      - name: azmlsi-visualization
+      - name: visualization
         image: mycontainerregistry.azurecr.us/viz-service
-        imagePullSecrets:
-            - name: image-pull-secret
+        imagePullPolicy: Always
         tty: true
         env:
         # consume the property-like keys in environment variables
@@ -89,12 +143,15 @@ spec:
               key: db-keyspace
         ports:
         - containerPort: 5000
+        - containerPort: 10350
         volumeMounts:
         - name: db-secrets
           mountPath: "/tmp/secrets/db"
           readOnly: true
+      imagePullSecrets:
+      - name: image-pull-secrets
       volumes:
-      - name: secrets
+      - name: db-secrets
         secret:
             secretName: db-secrets
 ---
@@ -108,7 +165,11 @@ spec:
     app: azmlsi-visualization-deployment
   ports:
   - protocol: TCP
+    name: web
     port: 5000
     targetPort: 5000
+  - protocol: TCP
+    name: cassandra
+    port: 10350
+    targetPort: 10350
   type: LoadBalancer
-  
