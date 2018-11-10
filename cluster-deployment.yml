@@ -136,11 +136,31 @@ spec:
         tty: true
         env:
         # consume the property-like keys in environment variables
-        - name: COSMOSDB_KEYSPACE
+        - name: DB_KEYSPACE
           valueFrom:
             configMapKeyRef:
               name: azmlsi-db-config
               key: db-keyspace
+        - name: DB_PERSONA_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-persona-table
+        - name: DB_PERSONA_EDGE_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-persona-edge-table
+        - name: DB_RAW_IMAGE_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-raw-image-table
+        - name: DB_REFINED_IMAGE_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-refined-image-table
         ports:
         - containerPort: 5000
         - containerPort: 10350
@@ -168,6 +188,7 @@ spec:
     name: web
     port: 5000
     targetPort: 5000
+    nodePort: 30080
   - protocol: TCP
     name: cassandra
     port: 10350

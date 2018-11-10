@@ -1,0 +1,5 @@
+tensorflow
+tensorflow-hub
+keras
+opencv-python
+protobuf==3.4.0
