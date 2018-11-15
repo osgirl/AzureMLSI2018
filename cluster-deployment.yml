@@ -9,6 +9,7 @@ data:
   db-persona-edge-table: persona_edge_table
   db-raw-image-table: raw_image_table
   db-refined-image-table: refined_image_table
+  db-log-table: log_table
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -17,6 +18,7 @@ metadata:
 data:
   # property-like keys
   az-bs-test-dir: "test-data-con"
+...
 ---
 ### Input deployment
 apiVersion: apps/v1
@@ -92,6 +94,7 @@ spec:
       - name: db-secrets
         secret:
             secretName: db-secrets
+...
 ---
 # Input service
 kind: Service
@@ -110,7 +113,7 @@ spec:
     port: 10350
     targetPort: 10350
     name: azure-cosmos-db
-  
+...
 ---
 ### Visualization Deployment
 apiVersion: apps/v1
@@ -174,6 +177,7 @@ spec:
       - name: db-secrets
         secret:
             secretName: db-secrets
+...
 ---
 ### Visualization Service
 kind: Service

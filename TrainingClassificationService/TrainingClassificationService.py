@@ -61,11 +61,11 @@ def extract_features(directory, sample_count):
     return features, labels
 
 train_features, train_labels = extract_features(train_dir, 20)
-validation_features, validation_labels = extract_features(validation_dir, 11)
+validation_features, validation_labels = extract_features(validation_dir, 19)
 #test_features, test_labels = extract_features(test_dir, 1000)
 
 train_features = np.reshape(train_features, (20, 4 * 4 * 512))
-validation_features = np.reshape(validation_features, (11, 4 * 4 * 512))
+validation_features = np.reshape(validation_features, (19, 4 * 4 * 512))
 
 from keras import models
 from keras import layers
@@ -84,3 +84,19 @@ history = model.fit(train_features, train_labels,
                     epochs=30,
                     batch_size=20,
                     validation_data=(validation_features, validation_labels))
+
+# serialize model to JSON
+model_json = model.to_json()
+with open("model.json", "w") as json_file:
+    json_file.write(model_json)
+# serialize weights to HDF5
+model.save_weights("model.h5")
+print("Saved model to disk")
+def main():
+    
+    
+if __name__ == '__main__':
+    '''
+
+    '''
+    main()

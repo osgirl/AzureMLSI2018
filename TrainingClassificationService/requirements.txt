@@ -3,3 +3,5 @@ tensorflow-hub
 keras
 opencv-python
 protobuf==3.4.0
+h5py
+python-opencv
