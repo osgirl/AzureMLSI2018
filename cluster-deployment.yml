@@ -10,6 +10,7 @@ data:
   db-raw-image-table: raw_image_table
   db-refined-image-table: refined_image_table
   db-log-table: log_table
+
 ---
 apiVersion: v1
 kind: ConfigMap

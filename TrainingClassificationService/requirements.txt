@@ -5,3 +5,6 @@ opencv-python
 protobuf==3.4.0
 h5py
 python-opencv
+pyyaml
+azure-cosmos>=1.0.0
+cassandra-driver>=1.0.0

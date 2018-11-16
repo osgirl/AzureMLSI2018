@@ -1,27 +1,40 @@
 # Azure ML Model Deployment and Sustainment SI 2018
 ## Introduction
-GitHub project for an information processing system which provides an example of how 
-to design a modern ML processing system on public cloud architecture. Specifically 
-this system is designed to demonstrate several key DevOps concepts related to agile 
-systems and particularly ML systems
+GitHub project for an information system which demonstrate DevOps concepts for Machine 
+Learning in combination with a Microservices Architecture and Public Cloud service.
 
 ## Deployment Instructions
+1. Acquire an Azure subscription on the commercial or gov't cluster with permissions to generate/access Storage and CosmosDB 
 
-### Azure Setup For Ubuntu 16.04
-
+###Clone project directory
 1. Clone the project from GitHub with the command 'git clone https://github.com/booz-allen-hamilton/AzureMLSI2018.git' and 
    navigate to the project root directory in the terminal/CLI
-1. Acquire an Azure subscription on the commercial or gov't cluster with the permissions 
-   needed to generate/access Storage and CosmosDB accounts (note the generation portions of the script can be deactivated 
-   if permissions are not available)
-1. Setup Azure Cloud Shell in your local host environment ()
-1. Setup powershell in your local host environment
-   (https://docs.microsoft.com/en-us/powershell/scripting/setup/installing-powershell-core-on-linux?view=powershell-6#snap-package)
-1. Configure the local powershell for Azure
-   (https://docs.microsoft.com/en-us/powershell/azure/install-azurermps-maclinux?view=azurermps-6.11.0)
-   with an additional instruction 'Install-Module -Name AzureRM.Netcore -AllowClobber'
-1. From inside the connected Powershell terminal, execute the service deployment script 
-   with the command './OrchestrationDriver/serviceDeploymentScript.ps1'
+
+### Azure Shell Setup
+1. Install Azure Shell according to Microsoft instructions, in this case for Ubuntu 
+   (https://docs.microsoft.com/en-us/cli/azure/install-azure-cli-apt?view=azure-cli-latest)
+1. If using Azure Gov't, reset the shell cloud 'az cloud set --name AzureUSGovernment'
+
+### Docker setup
+1. Install docker locally using sudo apt install docker (for Ubuntu) or as appropriate 
+   for your OS
+
+### Setup K8s Configs For Deployment
+1. If you do not want to use the defaults for the blob storage and database, manually edit the two 'ConfigMap" services 
+   at the top of the 'cluster-deployment.yml' file for the deployed Database and Blob Storage
+
+###Execute Cluster Deployment Shell Script
+1. RUn the cluster deployment script with './clusterDeploymentScript.sh'
+
+### Build And Push Images
+  sudo docker login mycontainerregistry.azurecr.us
+  sudo docker build -t mycontainerregistry.azurecr.us/input-service ./InputService/
+  sudo docker build -t mycontainerregistry.azurecr.us/viz-service ./VisualizationService/
+  sudo docker push mycontainerregistry.azurecr.us/input-service
+  sudo docker push mycontainerregistry.azurecr.us/viz-service
+  az acr repository list --name mycontainerregistry
+
+
 
 
 1. While logged in Azure with powershell navigate to the OrchestrationDriver subfolder 

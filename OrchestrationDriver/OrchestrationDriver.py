@@ -107,57 +107,6 @@ def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_con
     #Log table which allows the services to track write operations where needed, indexed by timestamp to the hour resolution
     session.execute('CREATE TABLE IF NOT EXISTS ' + log_table_name + ' (event_timestamp timestamp, event_type text, event_text text, PRIMARY KEY(event_timestamp, event_type))');
 
-def testLocalFaceDetect(source_dir):
-    cnn_face_classifier = cv2.dnn.readNetFromCaffe("deploy.prototxt.txt", "res10_300x300_ssd_iter_140000.caffemodel")
-
-    classifier_uri = "./Face_cascade.xml"
-    logging.debug("Loading face cascade from {0} which exists {1}".format(classifier_uri, os.path.exists(classifier_uri)))
-    cascade_face_classifier = cv2.CascadeClassifier(classifier_uri)
-
-    federated_total_count = 0
-    cnn_total_count = 0
-    cascade_total_count = 0
-    image_total_count = 0
-    for dir_path, dir_names, file_names in os.walk(source_dir, topdown=True):
-        for file_name in file_names:
-            image_uri = os.path.join(dir_path, file_name)
-            print(image_uri)
-            image=cv2.imread(image_uri)
-            
-            image_grey=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
-            faces = cascade_face_classifier.detectMultiScale(image_grey,scaleFactor=1.16,minNeighbors=5,minSize=(25,25),flags=0) 
-            
-            (h, w) = image.shape[:2]
-            blob = cv2.dnn.blobFromImage(cv2.resize(image, (300,300)), 1.0, (300, 300), (103.93, 116.77, 123.68))
-            cnn_face_classifier.setInput(blob)
-            detections = cnn_face_classifier.forward()
-            faceCount = 0
-            for i in range(0, detections.shape[2]):                
-                confidence = detections[0, 0, i, 2]
-                if confidence > 0.95:
-                    #print("{0} {1}".format(i, confidence))
-                    faceCount += 1
-                #box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-                #(startX, startY, endX, endY) = box.astype("int") 
-                #print("{0} {1} {2} {3}".format(startX, startY, endX, endY))
-            
-                
-            if len(faces) > 0:
-                federatedResult = len(faces)
-            elif faceCount > 0:
-                federatedResult = 1
-            else:
-                federatedResult = 0
-            print("Found {0} and {1} and {2} faces".format(len(faces), faceCount, federatedResult))
-            cascade_total_count += len(faces)
-            cnn_total_count += faceCount
-            federated_total_count += federatedResult
-            image_total_count += 1
-            
-            
-            
-    print("{0} {1} {2} {3} {4}".format(image_total_count, federated_total_count, cascade_total_count/image_total_count, cnn_total_count/image_total_count, federated_total_count/image_total_count))
-
 def generateAzureInputStore(bs_config, stor_name, stor_key, source_dir):
     '''
     Loads a folder of images with the appropriate filenames into the Azure Blob Storage dir so they are accessible to Input
