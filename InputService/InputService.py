@@ -56,21 +56,6 @@ def detectExtractFace(image_bytes):
             (startX, startY, endX, endY) = box.astype("int")
             roi_image = image[startY, endY, startX, endX]
             roi_images.append(roi_image)
-        
-    '''
-    faceCount = 0
-    for i in range(0, detections.shape[2]):                
-        confidence = detections[0, 0, i, 2]
-        if confidence > 0.95:
-            #print("{0} {1}".format(i, confidence))
-            faceCount += 1
-        federatedResult = len(faces)
-    print("Found {0} and {1} and {2} faces".format(len(faces), faceCount, federatedResult))
-    '''
-    counter = 0
-    for face in roi_images:
-        logging.debug("Face found!")
-        cv2.imwrite("face" + str(counter) + ".jpg", face)
             
     return roi_images
 
@@ -131,7 +116,7 @@ def testPopulateCassandraTables(choice_blobs, db_account_name, db_account_key, c
     #Iterates through labeled presidential images in a provided directory, extracts the label from 
     #the filename, and adds them as (randomly) labeled or unlabeled to the database
     personaInsertQuery = session.prepare("INSERT INTO " + personaTableName + " (persona_name) VALUES (?)")
-    personaEdgeInsertQuery = session.prepare("INSERT INTO " + personaEdgeTableName + " (persona_name, assoc_image_id, label_v_predict_assoc_flag) VALUES (?,?,?,?)")
+    personaEdgeInsertQuery = session.prepare("INSERT INTO " + personaEdgeTableName + " (persona_name, assoc_face_id, label_v_predict_assoc_flag) VALUES (?,?,?)")
     rawInsertQuery = session.prepare("INSERT INTO " + rawImageTableName + " (image_id, refined_image_edge_id, file_uri, image_bytes) VALUES (?,?,?,?)")
     refinedInsertQuery = session.prepare("INSERT INTO " + refinedImageTableName + " (image_id, raw_image_edge_id, image_bytes) VALUES (?,?,?)")
     
@@ -139,7 +124,6 @@ def testPopulateCassandraTables(choice_blobs, db_account_name, db_account_key, c
     for (blob, blob_bytes) in choice_blobs:
         file_name = blob.name
         (entity, usage, number) = file_name.split('-')
-        logging.debug("Writing blob name {0} into the table".format(file_name))
         
         #For each image extract the label and use to generate a persona, redundant writes will cancel out
         image_bytes = blob_bytes;
@@ -147,6 +131,7 @@ def testPopulateCassandraTables(choice_blobs, db_account_name, db_account_key, c
         
         #Write only if faces are found
         if len(face_list) > 0:
+            logging.debug("Face found in image {0}, writing to database".format(file_name))
             hashed_bytes = hashlib.md5(image_bytes).digest()
             hashed_bytes_int = int.from_bytes(hashed_bytes, byteorder='big') #Good identifier, sadly un
             image_hash = str(hashed_bytes_int) #Stupid workaround to Python high precision int incompatability

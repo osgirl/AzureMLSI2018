@@ -44,11 +44,10 @@ import yaml
 
 from azure.cosmos.cosmos_client import CosmosClient
 
-def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri):
+def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_config):
     '''
     Prepares the CosmoDB Cassandra instance for the demonstration by imposing the required keyspace and table structure
     '''
-    
     
     db_config = db_config['data']
     db_keyspace = db_config['db-keyspace']
@@ -76,10 +75,11 @@ def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri):
     
     session = cluster.connect(db_keyspace);   
 
+    keyspace = db_config['db-keyspace']
     persona_table_name = db_config['db-persona-table']
     persona_edge_table_name = db_config['db-persona-edge-table']
-    raw_image_table_name = db_config['db-raw-image-table'] 
-    refined_image_table_name = db_config['db-refined-image-table'] 
+    raw_image_table_name = db_config['db-raw-image-table']
+    refined_image_table_name = db_config['db-refined-image-table']
     log_table_name = db_config['db-log-table']
 
     #Create table
@@ -105,7 +105,7 @@ def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri):
     session.execute('CREATE TABLE IF NOT EXISTS ' + raw_image_table_name + ' (image_id text, refined_image_edge_id text, file_uri text, image_bytes blob, PRIMARY KEY(image_id))');
     
     #Log table which allows the services to track write operations where needed, indexed by timestamp to the hour resolution
-    session.execute('CREATE TABLE IF NOT EXISTS ' + log_table_name + ' (event_timestamp datetime, event_type text, event_text text PRIMARY KEY(event_timestamp, event_type))');
+    session.execute('CREATE TABLE IF NOT EXISTS ' + log_table_name + ' (event_timestamp timestamp, event_type text, event_text text, PRIMARY KEY(event_timestamp, event_type))');
 
 def testLocalFaceDetect(source_dir):
     cnn_face_classifier = cv2.dnn.readNetFromCaffe("deploy.prototxt.txt", "res10_300x300_ssd_iter_140000.caffemodel")
@@ -200,6 +200,8 @@ def main():
     merged_config = yaml.safe_load_all(open(merged_config_uri))
 
     for config in merged_config:
+        if config['metadata']['name'] == 'azmlsi-db-config':
+            db_config = config
         if config['metadata']['name'] == 'azmlsi-bs-config':
             bs_config = config
 
@@ -208,7 +210,7 @@ def main():
     source_dir = "./TestImages"
     
     generateAzureInputStore(bs_config, bs_account_name, bs_account_key, source_dir)
-    #generateCosmoDBStructure(config, db_account_name, db_account_key, ca_file_uri)
+    generateCosmoDBStructure(config, db_account_name, db_account_key, ca_file_uri, db_config)
 
     
 
