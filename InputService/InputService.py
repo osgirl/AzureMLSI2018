@@ -204,13 +204,13 @@ def main ():
         for config in merged_config:
             print(config)
             if config['metadata']['name'] == 'azmlsi-bs-config':
-                bs_test_container = config['data']['az-bs-test-dir']
+                bs_container = config['data']['az-bs-test-dir']
             if config['metadata']['name'] == 'azmlsi-db-config':
                 db_config  = config['data']
     
     ca_file_uri = "./cacert.pem"
 
-    choice_blobs = retrieveTestImageSample(bs_account_name, bs_account_key, bs_test_container)
+    choice_blobs = retrieveTestImageSample(bs_account_name, bs_account_key, bs_container)
     testPopulateCassandraTables(choice_blobs, db_account_name, db_account_key, ca_file_uri, db_config)
     
 if __name__ == '__main__':

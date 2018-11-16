@@ -4,4 +4,4 @@ cassandra-driver>=1.0.0
 azure-storage-blob>=1.0
 dlib
 numpy
-python-opencv
+opencv-python
