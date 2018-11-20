@@ -145,7 +145,7 @@ def main():
     bs_account_name = os.environ['BLOB_STORAGE_ACCOUNT']
     bs_account_key = os.environ['BLOB_STORAGE_KEY']
 
-    merged_config_uri = os.environ['CONFIG_URI']
+    merged_config_uri = "../cluster-deployment.yml"
     merged_config = yaml.safe_load_all(open(merged_config_uri))
 
     for config in merged_config:
