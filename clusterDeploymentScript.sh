@@ -1,39 +1,88 @@
-RESOURCE_GROUP="SAIML"
-COSMO_DB_NAME="azmlsidb"
-STORAGE_ACCOUNT_NAME="saimldiag889"
-BLOB_CONTAINER_NAME="test-data-con"
-CONTAINER_ACCOUNT="mycontainerregistry"
-COG_SERV_NAME="azmlsi_face_matcher"
+sudo apt install jq
+sudo snap install yq
 
+RESOURCE_GROUP="SAIML"
+CONTAINER_ACCOUNT="mycontainerregistry"
+
+#Export in order to make available to scripts
+export COSMO_DB_NAME="azmlsidb"
+export BLOB_STORAGE_ACCOUNT="saimldiag889"
+export BLOB_CONTAINER_NAME="test-data-con"
+
+COG_SERV_NAME="azmlsi_face_matcher"
+LOCATION="usgovarizona"
+
+CAPABILITIES="EnableCassandra"
+CONSISTENCY="BoundedStaleness"
+MAXINTERVALINSECONDS="10"
+MAXSTALENESSPREFIX="200"
+FAILOVERPRIORITY="false"
+KIND="GlobalDocumentDB"
 
 #Login local cloud shell to Azure gov't
 az cloud set --name AzureUSGovernment
 az login
 
-#Generate new Azure CosmosDB with Cassandra API
-az cosmosdb create --name $COSMO_DB_NAME --resource-group $RESOURCE_GROUP --capabilities EnableCassandra
-az cosmosdb list-keys --name $COSMO_DB_NAME --resource-group $RESOURCE_GROUP -o YAML > db_keys.yaml
+## Create group
+#az group create --name $RESOURCE_GROUP --location $LOCATION
 
-#Generate new Azure Cognitive Services API for facial detection
-az cognitiveservices account create --name $COG_SERV_NAME --resource-group $RESOURCE_GROUP --kind Face --sku S0 -l usgovvirginia
-az cognitiveservices account keys list --name $COG_SERV_NAME --resource-group $RESOURCE_GROUP -o yaml > cog_serv_key.yaml
+#Generate new Azure CosmosDB with Cassandra API
+az cosmosdb create --name $COSMO_DB_NAME \
+    --resource-group $RESOURCE_GROUP \
+    --capabilities $CAPABILITIES \
+    --default-consistency-level $CONSISTENCY \
+	--max-interval $MAXINTERVALINSECONDS \
+	--max-staleness-prefix $MAXSTALENESSPREFIX \
+	--enable-automatic-failover $FAILOVERPRIORITY \
+	--kind $KIND
+#az cosmosdb delete --name $COSMO_DB_NAME --resource-group $RESOURCE_GROUP
+export COSMO_DB_KEY=`az cosmosdb list-keys -n $COSMO_DB_NAME -g $RESOURCE_GROUP | jq -r '."primaryMasterKey"'`
 
 #Generate new Azure Blob Storage 
 az storage blob create --name $BLOB_CONTAINER_NAME
-az storage account keys list --account-name $STORAGE_ACCOUNT_NAME --output YAML > bs_keys.yaml
+#az storage blob delete --name $BLOB_CONTAINER_NAME
+export BLOB_STORAGE_KEY=`az storage account keys list -g $RESOURCE_GROUP -n $STORAGE_ACCOUNT_NAME | jq -r '.[]| select(.keyName == "key1")|.value'`
+#Edit the cluster configuration file
+yq w -i -d1 cluster-deployment.yml 'data.blob-storage-con' $BLOB_CONTAINER_NAME
+
+#Generate new Azure Cognitive Services API for facial detection
+az cognitiveservices account create --name $COG_SERV_NAME --resource-group $RESOURCE_GROUP --kind Face --sku S0 -l usgovvirginia
+#az cognitiveservices account delete --name $COG_SERV_NAME --resource-group $RESOURCE_GROUP
+COG_SERV_KEY=`az cognitiveservices account keys list --name $COG_SERV_NAME --resource-group $RESOURCE_GROUP -o json | jq -r '.key1'`
 
 #Generate an Azure Container Registry and extract access credentials
-az acr create --name $CONTAINER_ACCOUNT --resource-group SAIML --sku Standard --location usgovarizona
+az acr create --name $CONTAINER_ACCOUNT --resource-group $RESOURCE_GROUP --sku Standard --location $LOCATION
 az acr update --name $CONTAINER_ACCOUNT --admin-enabled true
-az acr credential show --name $CONTAINER_ACCOUNT --output yaml > acr_keys.yaml
+#az acr delete --name $CONTAINER_ACCOUNT --resource-group $RESOURCE_GROUP
+ACR_LOGIN_USERNAME=`az acr credential show --name $CONTAINER_ACCOUNT --output json | jq -r '.username'`
+ACR_LOGIN_KEY=`az acr credential show --name $CONTAINER_ACCOUNT --output json | jq -r '.passwords|.[0]|.value'`
 
 #Build and deploy containers to Azure Container Registry
-ACR_URI="{$CONTAINER_ACCOUNT}.azurecr.us"
-sudo docker login $ACR_URI
-sudo docker build -t "{$ACR_URI}/input-service" ./InputService/
-sudo docker build -t "{$ACR_URI}/viz-service" ./VisualizationService/
-sudo docker push "{$ACR_URI}/input-service"
-sudo docker push "{$ACR_URI}/viz-service"
+ACR_URI="$CONTAINER_ACCOUNT.azurecr.us"
+sudo docker login $ACR_URI -u $ACR_LOGIN_USERNAME -p $ACR_LOGIN_KEY
+sudo docker build -t "$ACR_URI/input-service" ./InputService/
+sudo docker build -t "$ACR_URI/viz-service" ./VisualizationService/
+sudo docker push "$ACR_URI/input-service"
+sudo docker push "$ACR_URI/viz-service"
+
+#Setup environment variables, install dependencies and run Orchestration Driver
+export CA_FILE_URI="./OrchestrationDriver/cacert.pem"
+export CLUSTER_CONFIG_URI="cluster-deployment.yml"
+
+sudo pip3 install -r ./OrchestrationDriver/requirements.txt
+python3 ./OrchestrationDriver/OrchestrationDriver.py
+
+#Register Azure secrets to prep for deployment
+CR_SECRET_NAME=image-pull-secrets
+YOUR_MAIL=wharton_caleb@bah.com
+BLOB_SECRET_NAME=bs-secrets
+DB_SECRET_NAME=db-secrets
+CS_SECRET_NAME=cs-secrets
+#Secret for Kubernetes Azure Container Registry
+kubectl create secret docker-registry $CR_SECRET_NAME --docker-server $ACR-URI --docker-email $YOUR_MAIL --docker-username=$ACR_LOGIN_USERNAME --docker-password $ACR_LOGIN_KEY
+kubectl create secret generic $BLOB_SECRET_NAME --from-literal=blob-storage-account=$STORAGE_ACCOUNT_NAME --from-literal=blob-storage-key=$STORAGE_ACCOUNT_KEY
+kubectl create secret generic $DB_SECRET_NAME --from-literal=db-account=$COSMO_DB_NAME --from-literal=db-key=$COSMO_DB_KEY
+kubectl create secret generic $CS_SECRET_NAME -- from-literal=cs-account=$COG_SERV_NAME --from-literal=db-key=$COG_SERV_KEY
 
 #az cloud list --output table
 #az group create --name AcsKubernetesResourceGroup --location usgovvirginia --tags orchestrator=kubernetes
