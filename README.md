@@ -11,7 +11,7 @@
 
 ### Azure Shell Setup
   Install Azure Shell according to Microsoft instructions, in this case for Ubuntu 
-   (https://docs.microsoft.com/en-us/cli/azure/install-azure-cli-apt?view=azure-cli-latest)
+   [azure-cli](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli-apt?view=azure-cli-latest)
   *If using Azure Gov't, reset the shell cloud `az cloud set --name AzureUSGovernment`*
 
 ### Docker setup
@@ -46,7 +46,7 @@ While logged in Azure with powershell navigate to the OrchestrationDriver subfol
  Use Minikube for local development and testing, noting the following gotchas
 
 * Minikube has its own IP when trying to access an externalized service [how-to-connect-to-minikube-services-from-outside](https://stackoverflow.com/questions/46180814/how-to-connect-to-minikube-services-from-outside)
-* Custom docker images must be pushed to the minikub internal docker instance (https://kubernetes.io/docs/tutorials/hello-minikube/) and login (portal.azure.com or portal.azure.us respectively)
+* Custom docker images must be pushed to the minikub internal docker instance [minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and login (*portal.azure.com* or *portal.azure.us* respectively)
 
 1. Install local Azure Powershell Instance (required on Gov't) to 
    [installing-powershell-core-on-linux](https://docs.microsoft.com/en-us/powershell/scripting/setup/installing-powershell-core-on-linux?view=powershell-6)
