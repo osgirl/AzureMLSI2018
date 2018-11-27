@@ -6,7 +6,7 @@ Learning in combination with a Microservices Architecture and Public Cloud servi
 ## Deployment Instructions
 1. Acquire an Azure subscription on the commercial or gov't cluster with permissions to generate/access Storage and CosmosDB 
 
-###Clone project directory
+### Clone project directory
 1. Clone the project from GitHub with the command `git clone https://github.com/booz-allen-hamilton/AzureMLSI2018.git` and 
    navigate to the project root directory in the terminal/CLI
 
@@ -20,10 +20,10 @@ Learning in combination with a Microservices Architecture and Public Cloud servi
    for your OS
 
 ### Setup K8s Configs For Deployment
-1. If you do not want to use the defaults for the blob storage and database, manually edit the two 'ConfigMap" services 
-   at the top of the 'cluster-deployment.yml' file for the deployed Database and Blob Storage
+1. If you do not want to use the defaults for the blob storage and database, manually edit the two **ConfigMap** services 
+   at the top of the **cluster-deployment.yml** file for the deployed Database and Blob Storage
 
-###Execute Cluster Deployment Shell Script
+### Execute Cluster Deployment Shell Script
 1. Run the cluster deployment script with `./clusterDeploymentScript.sh`
 
 ### Build And Push Images
@@ -38,24 +38,17 @@ Learning in combination with a Microservices Architecture and Public Cloud servi
 
 
 
-1. While logged in Azure with powershell navigate to the OrchestrationDriver subfolder 
-   of the project Github (), read 
+While logged in Azure with powershell navigate to the OrchestrationDriver subfolder 
+   of the project Github (), *generate a Azure File Storage Instance with the following 
+   in structions and arguments* (https://docs.microsoft.com/en-us/azure/storage/common/storage-powershell-guide-full)
+    
 
-generate a Azure File Storage Instance with the following 
-   in structions and arguments (https://docs.microsoft.com/en-us/azure/storage/common/storage-powershell-guide-full)
-    1.
-
-###Local Kubernetes Instructions
+### Local Kubernetes Instructions
 Use Minikube for local development and testing, noting the following gotchas
 
 * Minikube has its own IP when trying to access an externalized service (https://stackoverflow.com/questions/46180814/how-to-connect-to-minikube-services-from-outside)
-* Custom docker images must be pushed to the minikub internal docker instance (https://kubernetes.io/docs/tutorials/hello-minikube/)
+* Custom docker images must be pushed to the minikub internal docker instance (https://kubernetes.io/docs/tutorials/hello-minikube/) and login (portal.azure.com or portal.azure.us respectively)
 
-
-
-
-and login (portal.azure.com 
-or portal.azure.us respectively)
 1. Install local Azure Powershell Instance (required on Gov't) to 
    (https://docs.microsoft.com/en-us/powershell/scripting/setup/installing-powershell-core-on-linux?view=powershell-6)
 1. Setup a Service Principal to allow the Orchestration Driver to create and manipulate 
@@ -73,12 +66,12 @@ note ClientId, ClientSecret and TenantId for use in configuration later
 1. Ensure that the local environment has Internet access and can reach the portal.azure.us 
    domain via browser
 1. Ensure that the local environment has a CLI accessible Docker, Git, Python 3.x and compatible pip 
-   instance ('sudo apt install docker-compose, git, python3, pip3' on Ubuntu)
+   instance `sudo apt install docker-compose, git, python3, pip3`  *for Ubuntu*
 1. Ensure that the entire GitHub project repository is cloned locally 
-   ('git clone https://github.com/booz-allen-hamilton/AzureMLSI2018.git')
+   `git clone https://github.com/booz-allen-hamilton/AzureMLSI2018.git`
 1. From the root directory of the project, install the dependencies of the Orchestration 
    Driver `pip3 install -r ./OrchestrationDriver/requirements.txt`
-1. Copy and rename the "OrchestrationDriverConfigTemplate.json" to "OrchestrationDriverConfig.json"
+1. Copy and rename the **OrchestrationDriverConfigTemplate.json** to **OrchestrationDriverConfig.json**
    then populate with the Azure Storage and Azure CosmoDB Cassandra information noted 
    in the Azure setup instructions
 1. Execute OrchestrationDriver.py with Python 3 `python3 ./OrchestrationDriver/OrchestrationDriver.py`, 
@@ -155,7 +148,7 @@ host which can reach the Azure API. Its two primary tasks are to:
 
 More information can be found in the README.md inside its subfolder.
 
-###Input Service Container
+### Input Service Container
 The input service is a Python web app which is run in a docker container which 
 
 * Ingests prospective persona images into the CosmoDB to be processed by the TrainerClassifier 
