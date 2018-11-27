@@ -7,13 +7,13 @@ Learning in combination with a Microservices Architecture and Public Cloud servi
 1. Acquire an Azure subscription on the commercial or gov't cluster with permissions to generate/access Storage and CosmosDB 
 
 ###Clone project directory
-1. Clone the project from GitHub with the command 'git clone https://github.com/booz-allen-hamilton/AzureMLSI2018.git' and 
+1. Clone the project from GitHub with the command `git clone https://github.com/booz-allen-hamilton/AzureMLSI2018.git` and 
    navigate to the project root directory in the terminal/CLI
 
 ### Azure Shell Setup
 1. Install Azure Shell according to Microsoft instructions, in this case for Ubuntu 
    (https://docs.microsoft.com/en-us/cli/azure/install-azure-cli-apt?view=azure-cli-latest)
-1. If using Azure Gov't, reset the shell cloud 'az cloud set --name AzureUSGovernment'
+1. If using Azure Gov't, reset the shell cloud `az cloud set --name AzureUSGovernment`
 
 ### Docker setup
 1. Install docker locally using sudo apt install docker (for Ubuntu) or as appropriate 
@@ -24,16 +24,17 @@ Learning in combination with a Microservices Architecture and Public Cloud servi
    at the top of the 'cluster-deployment.yml' file for the deployed Database and Blob Storage
 
 ###Execute Cluster Deployment Shell Script
-1. RUn the cluster deployment script with './clusterDeploymentScript.sh'
+1. Run the cluster deployment script with `./clusterDeploymentScript.sh`
 
 ### Build And Push Images
+```bash
   sudo docker login mycontainerregistry.azurecr.us
   sudo docker build -t mycontainerregistry.azurecr.us/input-service ./InputService/
   sudo docker build -t mycontainerregistry.azurecr.us/viz-service ./VisualizationService/
   sudo docker push mycontainerregistry.azurecr.us/input-service
   sudo docker push mycontainerregistry.azurecr.us/viz-service
   az acr repository list --name mycontainerregistry
-
+```
 
 
 
@@ -76,11 +77,11 @@ note ClientId, ClientSecret and TenantId for use in configuration later
 1. Ensure that the entire GitHub project repository is cloned locally 
    ('git clone https://github.com/booz-allen-hamilton/AzureMLSI2018.git')
 1. From the root directory of the project, install the dependencies of the Orchestration 
-   Driver 'pip3 install -r ./OrchestrationDriver/requirements.txt'
+   Driver `pip3 install -r ./OrchestrationDriver/requirements.txt`
 1. Copy and rename the "OrchestrationDriverConfigTemplate.json" to "OrchestrationDriverConfig.json"
    then populate with the Azure Storage and Azure CosmoDB Cassandra information noted 
    in the Azure setup instructions
-1. Execute OrchestrationDriver.py with Python 3 'python3 ./OrchestrationDriver/OrchestrationDriver.py', 
+1. Execute OrchestrationDriver.py with Python 3 `python3 ./OrchestrationDriver/OrchestrationDriver.py`, 
    This should 
     1. Generate remaining required services in Azure including the VLAN, ContainerRegistry 
     and CognitiveServices
