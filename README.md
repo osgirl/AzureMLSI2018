@@ -1,69 +1,62 @@
 # Azure ML Model Deployment and Sustainment SI 2018
 ## Introduction
-GitHub project for an information system which demonstrate DevOps concepts for Machine 
-Learning in combination with a Microservices Architecture and Public Cloud service.
+  GitHub project for an information system which demonstrate DevOps concepts for Machine Learning in combination with a Microservices Architecture and Public Cloud service.
 
 ## Deployment Instructions
-1. Acquire an Azure subscription on the commercial or gov't cluster with permissions to generate/access Storage and CosmosDB 
+  Acquire an Azure subscription on the commercial or gov't cluster with permissions to generate/access Storage and CosmosDB 
 
-###Clone project directory
-1. Clone the project from GitHub with the command 'git clone https://github.com/booz-allen-hamilton/AzureMLSI2018.git' and 
+### Clone project directory
+  Clone the project from GitHub with the command `git clone https://github.com/booz-allen-hamilton/AzureMLSI2018.git` and 
    navigate to the project root directory in the terminal/CLI
 
 ### Azure Shell Setup
-1. Install Azure Shell according to Microsoft instructions, in this case for Ubuntu 
-   (https://docs.microsoft.com/en-us/cli/azure/install-azure-cli-apt?view=azure-cli-latest)
-1. If using Azure Gov't, reset the shell cloud 'az cloud set --name AzureUSGovernment'
+  Install Azure Shell according to Microsoft instructions, in this case for Ubuntu 
+   [azure-cli](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli-apt?view=azure-cli-latest)
+  *If using Azure Gov't, reset the shell cloud `az cloud set --name AzureUSGovernment`*
 
 ### Docker setup
-1. Install docker locally using sudo apt install docker (for Ubuntu) or as appropriate 
+  Install docker locally using `sudo apt install docker` (for Ubuntu) or as appropriate 
    for your OS
 
 ### Setup K8s Configs For Deployment
-1. If you do not want to use the defaults for the blob storage and database, manually edit the two 'ConfigMap" services 
-   at the top of the 'cluster-deployment.yml' file for the deployed Database and Blob Storage
+  If you do not want to use the defaults for the blob storage and database, manually edit the two **ConfigMap** services 
+   at the top of the **cluster-deployment.yml** file for the deployed Database and Blob Storage
 
-###Execute Cluster Deployment Shell Script
-1. RUn the cluster deployment script with './clusterDeploymentScript.sh'
+### Execute Cluster Deployment Shell Script
+  Run the cluster deployment script with `./clusterDeploymentScript.sh`
 
 ### Build And Push Images
+```bash
   sudo docker login mycontainerregistry.azurecr.us
   sudo docker build -t mycontainerregistry.azurecr.us/input-service ./InputService/
   sudo docker build -t mycontainerregistry.azurecr.us/viz-service ./VisualizationService/
   sudo docker push mycontainerregistry.azurecr.us/input-service
   sudo docker push mycontainerregistry.azurecr.us/viz-service
   az acr repository list --name mycontainerregistry
+```
 
 
 
+While logged in Azure with powershell navigate to the OrchestrationDriver subfolder 
+   of the project Github (), *generate a Azure File Storage Instance with the following 
+   in structions and arguments* [storage-powershell-guide](https://docs.microsoft.com/en-us/azure/storage/common/storage-powershell-guide-full)
+    
 
-1. While logged in Azure with powershell navigate to the OrchestrationDriver subfolder 
-   of the project Github (), read 
+### Local Kubernetes Instructions
+ Use Minikube for local development and testing, noting the following gotchas
 
-generate a Azure File Storage Instance with the following 
-   in structions and arguments (https://docs.microsoft.com/en-us/azure/storage/common/storage-powershell-guide-full)
-    1.
+* Minikube has its own IP when trying to access an externalized service [how-to-connect-to-minikube-services-from-outside](https://stackoverflow.com/questions/46180814/how-to-connect-to-minikube-services-from-outside)
+* Custom docker images must be pushed to the minikub internal docker instance [minikube](https://kubernetes.io/docs/tutorials/hello-minikube/) and login (*portal.azure.com* or *portal.azure.us* respectively)
 
-###Local Kubernetes Instructions
-Use Minikube for local development and testing, noting the following gotchas
-
-* Minikube has its own IP when trying to access an externalized service (https://stackoverflow.com/questions/46180814/how-to-connect-to-minikube-services-from-outside)
-* Custom docker images must be pushed to the minikub internal docker instance (https://kubernetes.io/docs/tutorials/hello-minikube/)
-
-
-
-
-and login (portal.azure.com 
-or portal.azure.us respectively)
 1. Install local Azure Powershell Instance (required on Gov't) to 
-   (https://docs.microsoft.com/en-us/powershell/scripting/setup/installing-powershell-core-on-linux?view=powershell-6)
-1. Setup a Service Principal to allow the Orchestration Driver to create and manipulate 
-processing resources (https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal)
+   [installing-powershell-core-on-linux](https://docs.microsoft.com/en-us/powershell/scripting/setup/installing-powershell-core-on-linux?view=powershell-6)
+2. Setup a Service Principal to allow the Orchestration Driver to create and manipulate 
+processing resources [howto-create-service-principal-portal](https://docs.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal)
 note ClientId, ClientSecret and TenantId for use in configuration later
-1. Generate a Azure File Storage Instance (If using pre-generated test data)
-1. Generate a CosmoDB Cassanda Instance
+3. Generate a Azure File Storage Instance (If using pre-generated test data)
+4. Generate a CosmoDB Cassanda Instance
     1. Generate CosmoDB Cassandra API instance for the Python driver using the following instructions 
-    (https://docs.microsoft.com/en-us/azure/cosmos-db/create-cassandra-python), providing 
+    [create-cassandra-python](https://docs.microsoft.com/en-us/azure/cosmos-db/create-cassandra-python), providing 
     and noting a custom service name and endpoint url (which will be used for configuration later)*
     2. Navigate to the generated CosmoDB Cassandra resource on the portal and go to quickstart, 
     then note the CosmoDB secret (which will also be used for configuration)
@@ -71,25 +64,25 @@ note ClientId, ClientSecret and TenantId for use in configuration later
 ### Local Setup
 1. Ensure that the local environment has Internet access and can reach the portal.azure.us 
    domain via browser
-1. Ensure that the local environment has a CLI accessible Docker, Git, Python 3.x and compatible pip 
-   instance ('sudo apt install docker-compose, git, python3, pip3' on Ubuntu)
-1. Ensure that the entire GitHub project repository is cloned locally 
-   ('git clone https://github.com/booz-allen-hamilton/AzureMLSI2018.git')
-1. From the root directory of the project, install the dependencies of the Orchestration 
-   Driver 'pip3 install -r ./OrchestrationDriver/requirements.txt'
-1. Copy and rename the "OrchestrationDriverConfigTemplate.json" to "OrchestrationDriverConfig.json"
+2. Ensure that the local environment has a CLI accessible Docker, Git, Python 3.x and compatible pip 
+   instance `sudo apt install docker-compose, git, python3, pip3`  *for Ubuntu*
+3. Ensure that the entire GitHub project repository is cloned locally 
+   `git clone https://github.com/booz-allen-hamilton/AzureMLSI2018.git`
+4. From the root directory of the project, install the dependencies of the Orchestration 
+   Driver `pip3 install -r ./OrchestrationDriver/requirements.txt`
+5. Copy and rename the **OrchestrationDriverConfigTemplate.json** to **OrchestrationDriverConfig.json**
    then populate with the Azure Storage and Azure CosmoDB Cassandra information noted 
    in the Azure setup instructions
-1. Execute OrchestrationDriver.py with Python 3 'python3 ./OrchestrationDriver/OrchestrationDriver.py', 
+6. Execute OrchestrationDriver.py with Python 3 `python3 ./OrchestrationDriver/OrchestrationDriver.py`, 
    This should 
     1. Generate remaining required services in Azure including the VLAN, ContainerRegistry 
     and CognitiveServices
-    1. Configure and build the other services in the repository, register them with 
+    2. Configure and build the other services in the repository, register them with 
     the Azure ContainerRegistry, and launch them
 
 ## Key Concepts 
 
-* Programmatic Cloud Deployment
+**Programmatic Cloud Deployment**
 
 A key tenant of DevOps philosophy is the movement towards automation in development, 
 testing, building and deployment of systems. By providing the ability to create and 
@@ -102,7 +95,7 @@ GUI and requires a compatible DSL/Library and API
 Programmatic deployment helps make complex systems more agile by making it easier to 
 test the impact of changes at any level of the system
 
-* Service Oriented Architecture
+**Service Oriented Architecture**
 
 In this case services are simplified to mean REST services, meaning software systems 
 which can only be interacted with via formally defined network interfaces (in this 
@@ -119,8 +112,8 @@ and ports are often the default means of communication in and out of a container
 a lot of products built atop docker address the complexities of orchestrating those 
 communications across large numbers of both heterogeneous and homogenous services.
 
-* Dynamic ML Retrain and Deployment
-* Cloud Storage as a Service
+**Dynamic ML Retrain and Deployment**
+**Cloud Storage as a Service**
 
 One of the truths of cloud architecture is that data is the lowest common denominator 
 of most information systems.
@@ -154,7 +147,7 @@ host which can reach the Azure API. Its two primary tasks are to:
 
 More information can be found in the README.md inside its subfolder.
 
-###Input Service Container
+### Input Service Container
 The input service is a Python web app which is run in a docker container which 
 
 * Ingests prospective persona images into the CosmoDB to be processed by the TrainerClassifier 
