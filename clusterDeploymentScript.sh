@@ -1,17 +1,19 @@
 sudo apt install jq
 sudo snap install yq
 
-RESOURCE_GROUP="SAIML"
-CONTAINER_ACCOUNT="mycontainerregistry"
+RESOURCE_GROUP="CommercialCyberAzure"
+CONTAINER_ACCOUNT="AZMLSIACR"
 
 #Export in order to make available to scripts
-export COSMO_DB_NAME="azmlsidb"
-export BLOB_STORAGE_ACCOUNT="saimldiag889"
+export COSMOS_DB_ACCOUNT="azmlsidb"
+export BLOB_STORAGE_ACCOUNT="commercialcyberazurediag"
 export BLOB_CONTAINER_NAME="test-data-con"
 
 COG_SERV_NAME="azmlsi_face_matcher"
-LOCATION="usgovarizona"
+#LOCATION="usgovarizona"
+LOCATION="eastus"
 
+#
 CAPABILITIES="EnableCassandra"
 CONSISTENCY="BoundedStaleness"
 MAXINTERVALINSECONDS="10"
@@ -19,34 +21,31 @@ MAXSTALENESSPREFIX="200"
 FAILOVERPRIORITY="false"
 KIND="GlobalDocumentDB"
 
+ACS_NAME="AZMLSIACS"
+
 #Login local cloud shell to Azure gov't
-az cloud set --name AzureUSGovernment
+#az cloud set --name AzureUSGovernment
+az cloud set --name AzureCloud
 az login
 
 ## Create group
 #az group create --name $RESOURCE_GROUP --location $LOCATION
 
 #Generate new Azure CosmosDB with Cassandra API
-az cosmosdb create --name $COSMO_DB_NAME \
-    --resource-group $RESOURCE_GROUP \
-    --capabilities $CAPABILITIES \
-    --default-consistency-level $CONSISTENCY \
-	--max-interval $MAXINTERVALINSECONDS \
-	--max-staleness-prefix $MAXSTALENESSPREFIX \
-	--enable-automatic-failover $FAILOVERPRIORITY \
-	--kind $KIND
-#az cosmosdb delete --name $COSMO_DB_NAME --resource-group $RESOURCE_GROUP
-export COSMO_DB_KEY=`az cosmosdb list-keys -n $COSMO_DB_NAME -g $RESOURCE_GROUP | jq -r '."primaryMasterKey"'`
+az cosmosdb create --name $COSMOS_DB_ACCOUNT --resource-group $RESOURCE_GROUP --capabilities $CAPABILITIES --default-consistency-level $CONSISTENCY --max-interval $MAXINTERVALINSECONDS --max-staleness-prefix $MAXSTALENESSPREFIX --enable-automatic-failover $FAILOVERPRIORITY --kind $KIND
+#az cosmosdb delete --name $COSMOS_DB_ACCOUNT --resource-group $RESOURCE_GROUP
+export COSMOS_DB_KEY=`az cosmosdb list-keys -n $COSMOS_DB_ACCOUNT -g $RESOURCE_GROUP | jq -r '."primaryMasterKey"'`
 
 #Generate new Azure Blob Storage 
-az storage blob create --name $BLOB_CONTAINER_NAME
+#az storage blob create --name $BLOB_CONTAINER_NAME
 #az storage blob delete --name $BLOB_CONTAINER_NAME
-export BLOB_STORAGE_KEY=`az storage account keys list -g $RESOURCE_GROUP -n $STORAGE_ACCOUNT_NAME | jq -r '.[]| select(.keyName == "key1")|.value'`
+export BLOB_STORAGE_KEY=`az storage account keys list -g $RESOURCE_GROUP -n $BLOB_STORAGE_ACCOUNT | jq -r '.[]| select(.keyName == "key1")|.value'`
+az storage container create --name $BLOB_CONTAINER_NAME --account-name $BLOB_STORAGE_ACCOUNT --account-key $BLOB_STORAGE_KEY
 #Edit the cluster configuration file
 yq w -i -d1 cluster-deployment.yml 'data.blob-storage-con' $BLOB_CONTAINER_NAME
 
 #Generate new Azure Cognitive Services API for facial detection
-az cognitiveservices account create --name $COG_SERV_NAME --resource-group $RESOURCE_GROUP --kind Face --sku S0 -l usgovvirginia
+az cognitiveservices account create --name $COG_SERV_NAME --resource-group $RESOURCE_GROUP --kind Face --sku S0 -l $LOCATION
 #az cognitiveservices account delete --name $COG_SERV_NAME --resource-group $RESOURCE_GROUP
 COG_SERV_KEY=`az cognitiveservices account keys list --name $COG_SERV_NAME --resource-group $RESOURCE_GROUP -o json | jq -r '.key1'`
 
@@ -81,9 +80,7 @@ CS_SECRET_NAME=cs-secrets
 #Secret for Kubernetes Azure Container Registry
 kubectl create secret docker-registry $CR_SECRET_NAME --docker-server $ACR-URI --docker-email $YOUR_MAIL --docker-username=$ACR_LOGIN_USERNAME --docker-password $ACR_LOGIN_KEY
 kubectl create secret generic $BLOB_SECRET_NAME --from-literal=blob-storage-account=$STORAGE_ACCOUNT_NAME --from-literal=blob-storage-key=$STORAGE_ACCOUNT_KEY
-kubectl create secret generic $DB_SECRET_NAME --from-literal=db-account=$COSMO_DB_NAME --from-literal=db-key=$COSMO_DB_KEY
+kubectl create secret generic $DB_SECRET_NAME --from-literal=db-account=$COSMOS_DB_ACCOUNT --from-literal=db-key=$COSMOS_DB_KEY
 kubectl create secret generic $CS_SECRET_NAME -- from-literal=cs-account=$COG_SERV_NAME --from-literal=db-key=$COG_SERV_KEY
 
-#az cloud list --output table
-#az group create --name AcsKubernetesResourceGroup --location usgovvirginia --tags orchestrator=kubernetes
-#az acs create --orchestrator-type kubernetes --name AcsKubernetes --resource-group AcsKubernetesResourceGroup --generate-ssh-keys --output jsonc
+az acs create --orchestrator-type kubernetes --name $ACS_NAME --resource-group $RESOURCE_GROUP --generate-ssh-keys --output jsonc
