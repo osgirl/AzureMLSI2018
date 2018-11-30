@@ -21,7 +21,7 @@ MAXSTALENESSPREFIX="200"
 FAILOVERPRIORITY="false"
 KIND="GlobalDocumentDB"
 
-ACS_NAME="AZMLSIACS"
+AKS_NAME="AZMLSIAKS"
 
 #Login local cloud shell to Azure gov't
 #az cloud set --name AzureUSGovernment
@@ -57,7 +57,8 @@ ACR_LOGIN_USERNAME=`az acr credential show --name $CONTAINER_ACCOUNT --output js
 ACR_LOGIN_KEY=`az acr credential show --name $CONTAINER_ACCOUNT --output json | jq -r '.passwords|.[0]|.value'`
 
 #Build and deploy containers to Azure Container Registry
-ACR_URI="$CONTAINER_ACCOUNT.azurecr.us"
+#ACR_URI="$CONTAINER_ACCOUNT.azurecr.us" #For gov't
+ACR_URI="$CONTAINER_ACCOUNT.azurecr.io" #For Commercial
 sudo docker login $ACR_URI -u $ACR_LOGIN_USERNAME -p $ACR_LOGIN_KEY
 sudo docker build -t "$ACR_URI/input-service" ./InputService/
 sudo docker build -t "$ACR_URI/viz-service" ./VisualizationService/
@@ -83,4 +84,4 @@ kubectl create secret generic $BLOB_SECRET_NAME --from-literal=blob-storage-acco
 kubectl create secret generic $DB_SECRET_NAME --from-literal=db-account=$COSMOS_DB_ACCOUNT --from-literal=db-key=$COSMOS_DB_KEY
 kubectl create secret generic $CS_SECRET_NAME -- from-literal=cs-account=$COG_SERV_NAME --from-literal=db-key=$COG_SERV_KEY
 
-az acs create --orchestrator-type kubernetes --name $ACS_NAME --resource-group $RESOURCE_GROUP --generate-ssh-keys --output jsonc
+az aks create --resource-group $RESOURCE_GROUP --name $AKS_NAME --node-count 1 --enable-addons monitoring --generate-ssh-keys
