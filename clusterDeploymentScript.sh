@@ -59,9 +59,9 @@ ACR_LOGIN_KEY=`az acr credential show --name $CONTAINER_ACCOUNT --output json | 
 #Build and deploy containers to Azure Container Registry
 #ACR_URI="$CONTAINER_ACCOUNT.azurecr.us" #For gov't
 ACR_URI="$CONTAINER_ACCOUNT.azurecr.io" #For Commercial
-sudo docker login $ACR_URI -u $ACR_LOGIN_USERNAME -p $ACR_LOGIN_KEY
 sudo docker build -t "$ACR_URI/input-service" ./InputService/
 sudo docker build -t "$ACR_URI/viz-service" ./VisualizationService/
+sudo docker login $ACR_URI -u $ACR_LOGIN_USERNAME -p $ACR_LOGIN_KEY
 sudo docker push "$ACR_URI/input-service"
 sudo docker push "$ACR_URI/viz-service"
 
