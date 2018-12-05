@@ -32,6 +32,8 @@ import numpy as np
 
 from pathlib import Path
 
+import hashlib
+
 import argparse
 
 import os
@@ -52,8 +54,10 @@ def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_con
     db_config = db_config['data']
     db_keyspace = db_config['db-keyspace']
     
-    endpoint_uri = db_name + '.cassandra.cosmosdb.azure.us'
-    logging.debug("Connecting to CosmosDB Cassandra using {0} {1} {2} {3}".format(db_name, db_key, endpoint_uri, os.path.exists(ca_file_uri)))
+    endpoint_uri = db_name + '.cassandra.cosmosdb.azure.com'
+    #endpoint_uri = db_name + '.cassandra.cosmosdb.azure.us'
+
+    logging.debug("Connecting to CosmosDB Cassandra using {0} {1} {2}".format(db_name, endpoint_uri, os.path.exists(ca_file_uri)))
 
     #Cassandra connection options for the Azure CosmoDB with Cassandra API from the quickstart documentation on the portal page
     #grabbed my CA.pem from Mozilla https://curl.haxx.se/docs/caextract.html
@@ -65,7 +69,6 @@ def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_con
     auth_provider = PlainTextAuthProvider(username=db_name, password=db_key)
     cluster = Cluster([endpoint_uri], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
         
-    
     #Checks to ensure that the demonstration keyspace exists and creates it if not 
     session = cluster.connect()
     
@@ -113,9 +116,11 @@ def generateAzureInputStore(bs_config, stor_name, stor_key, source_dir):
     workers running in the cloud
     '''
         
-    bs_dir_name = bs_config['data']['az-bs-test-dir']
+    bs_dir_name = bs_config['data']['blob-storage-con']
     
-    block_blob_service = BlockBlobService(account_name=stor_name, account_key=stor_key, endpoint_suffix="core.usgovcloudapi.net")
+    storage_uri=""
+    block_blob_service = BlockBlobService(account_name=stor_name, account_key=stor_key)
+                                          #, endpoint_suffix="core.usgovcloudapi.net") #addendum for use on gov't
     block_blob_service.create_container(bs_dir_name)
     logging.debug("Connected to blob service {0}".format(stor_name))
 
@@ -123,13 +128,17 @@ def generateAzureInputStore(bs_config, stor_name, stor_key, source_dir):
     for dir_path, dir_names, file_names in os.walk(source_dir, topdown=True):
         for file_name in file_names:
             dir_components = Path(dir_path)
-            print(dir_components)
             usage = dir_components.parts[len(dir_components.parts) - 1]
             entity = dir_components.parts[len(dir_components.parts) - 2]
-            blob_name = usage + "-" + entity + "-" + str(image_count)
+            
+            image_file = open(os.path.join(dir_path, file_name), 'rb').read()
+            hash = hashlib.md5(image_file).hexdigest()    
+            
+            blob_name = usage + "-" + entity + "-" + str(hash)
             block_blob_service.create_blob_from_path(bs_dir_name, blob_name, dir_path + "/" + file_name)
             logging.debug("File written to blob container {0} from {1} {2}".format(bs_dir_name, os.path.join(dir_path, file_name), blob_name))
-            image_count += 1
+            os.rename(os.path.join(dir_path, file_name), os.path.join(dir_path, blob_name))
+            logging.debug("Renamed {0} to {1}".format(os.path.join(dir_path, file_name), os.path.join(dir_path, blob_name)))
 
 def main():
     logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -139,23 +148,25 @@ def main():
     #Check if the blob storage access credentials have been loaded as a secret volume, then look at the environment variables for
     #testing
     
-    db_account_name = os.environ['DB_ACCOUNT']
-    db_account_key = os.environ['DB_KEY']
+    db_account_name = os.environ['COSMOS_DB_ACCOUNT']
+    db_account_key = os.environ['COSMOS_DB_KEY']
     
     bs_account_name = os.environ['BLOB_STORAGE_ACCOUNT']
     bs_account_key = os.environ['BLOB_STORAGE_KEY']
 
-    merged_config_uri = "../cluster-deployment.yml"
+    #merged_config_uri = "../cluster-deployment.yml"
+    merged_config_uri = os.environ['CLUSTER_CONFIG_URI']
     merged_config = yaml.safe_load_all(open(merged_config_uri))
-
     for config in merged_config:
         if config['metadata']['name'] == 'azmlsi-db-config':
             db_config = config
         if config['metadata']['name'] == 'azmlsi-bs-config':
             bs_config = config
+            bs_container = config['data']['blob-storage-con']
 
     #cfg = json.load(open('./OrchestrationDriverConfig.json', 'r'))
-    ca_file_uri = "./cacert.pem"
+    #ca_file_uri = "./cacert.pem"
+    ca_file_uri = os.environ["CA_FILE_URI"]
     source_dir = "./TestImages"
     
     generateAzureInputStore(bs_config, bs_account_name, bs_account_key, source_dir)
