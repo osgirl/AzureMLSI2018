@@ -20,7 +20,7 @@ app = Flask(__name__)
 db_name = open('/tmp/secrets/db/db-account', 'r').read()
 db_passwd = open('/tmp/secrets/db/db-key', 'r').read()
 
-azure_db_domain = ".cassandra.cosmosdb.azure.us"
+azure_db_domain = ".cassandra.cosmosdb.azure.com"
 azure_db_endpoint_uri = db_name + azure_db_domain
 
 #Cassandra connection options for the Azure CosmoDB with Cassandra API from the quickstart documentation on the portal page
