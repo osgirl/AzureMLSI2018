@@ -35,7 +35,7 @@ spec:
     spec:
       containers:
       - name: azmlsi-input
-        image: mycontainerregistry.azurecr.us/input-service
+        image: azmlsiacr.azurecr.io/input-service
         tty: true
         env:
         - name: BS_TEST_CON
@@ -125,7 +125,7 @@ spec:
     spec:
       containers:
       - name: visualization
-        image: mycontainerregistry.azurecr.us/viz-service
+        image: azmlsiacr.azurecr.io/viz-service
         imagePullPolicy: Always
         tty: true
         env:
