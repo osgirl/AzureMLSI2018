@@ -64,7 +64,7 @@ def retrieveTestImageSample(bs_account_name, bs_account_key, bs_container):
 
     '''
     
-    blob_service = BlockBlobService(account_name=bs_account_name, account_key=bs_account_key, endpoint_suffix="core.usgovcloudapi.net")
+    blob_service = BlockBlobService(account_name=bs_account_name, account_key=bs_account_key, endpoint_suffix="core.windows.net")
     logging.debug("Created blob service client using {0} account {1} container".format(bs_account_name, bs_container))
 
     blobs = blob_service.list_blobs(bs_container)
