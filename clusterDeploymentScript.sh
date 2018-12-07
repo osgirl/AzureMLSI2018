@@ -84,4 +84,4 @@ kubectl create secret generic $BLOB_SECRET_NAME --from-literal=blob-storage-acco
 kubectl create secret generic $DB_SECRET_NAME --from-literal=db-account=$COSMOS_DB_ACCOUNT --from-literal=db-key=$COSMOS_DB_KEY
 kubectl create secret generic $CS_SECRET_NAME -- from-literal=cs-account=$COG_SERV_NAME --from-literal=db-key=$COG_SERV_KEY
 
-az aks create --resource-group $RESOURCE_GROUP --name $AKS_NAME --node-count 1 --enable-addons monitoring --generate-ssh-keys
+#az aks create --resource-group $RESOURCE_GROUP --name $AKS_NAME --node-count 1 --enable-addons monitoring --generate-ssh-keys
