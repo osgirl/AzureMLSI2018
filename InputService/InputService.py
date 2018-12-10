@@ -93,7 +93,7 @@ def testPopulateCassandraTables(choice_blobs, db_account_name, db_account_key, c
         'cert_reqs': CERT_REQUIRED  # Certificates are required and validated
     }
     auth_provider = PlainTextAuthProvider(username=db_account_name, password=db_account_key)
-    endpoint_uri = db_account_name + '.cassandra.cosmosdb.azure.us'
+    endpoint_uri = db_account_name + '.cassandra.cosmosdb.azure.com'
     cluster = Cluster([endpoint_uri], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
 
     #If no db config file is passed, look for the container environment variables
@@ -170,6 +170,8 @@ def main ():
         db_account_name = open('/tmp/secrets/db/db-account').read()
         db_account_key = open('/tmp/secrets/db/db-key').read()
         logging.debug('Loaded db secrets from secret volume')
+
+        
     #Otherwise assume it is being run locally and load from environment variables
     else: 
         bs_account_name = os.environ['AZ_BS_ACCOUNT_NAME']
@@ -178,6 +180,7 @@ def main ():
         
         db_account_name = os.environ['AZ_DB_ACCOUNT_NAME']
         db_account_key = os.environ['AZ_DB_ACCOUNT_KEY']
+
 
     #If the test container is not loaded as an environment variable, assume a local run
     #and use the configuration information in the deployment config
@@ -194,6 +197,7 @@ def main ():
                 db_config  = config['data']
     
     ca_file_uri = "./cacert.pem"
+
 
     choice_blobs = retrieveTestImageSample(bs_account_name, bs_account_key, bs_container)
     testPopulateCassandraTables(choice_blobs, db_account_name, db_account_key, ca_file_uri, db_config)
