@@ -17,17 +17,16 @@ metadata:
 data:
   blob-storage-con: test-data-con
 ---
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: batch/v1
+kind: Job
 metadata:
   name: azmlsi-input-dpmt
   labels:
     app: azmlsi-input-dpmt
 spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: azmlsi-input-dpmt
+  completions : 1
+  backoffLimit: 3
+  activeDeadlineSeconds: 100
   template:
     metadata:
       labels:
@@ -80,6 +79,7 @@ spec:
         - name: db-secrets
           mountPath: /tmp/secrets/db
           readOnly: true
+      restartPolicy: Never
       imagePullSecrets:
       - name: image-pull-secrets
       volumes:
