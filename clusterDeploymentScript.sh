@@ -27,7 +27,7 @@ KIND="GlobalDocumentDB"
 AKSNAME="k8s-server"
 
 #Login local cloud shell to Azure gov't
-az cloud set --name AzureUSGovernment
+#az cloud set --name AzureUSGovernment
 az cloud set --name AzureCloud
 az login
 
@@ -40,7 +40,7 @@ az cosmosdb create --name $COSMOS_DB_ACCOUNT --resource-group $RESOURCE_GROUP --
 export COSMOS_DB_KEY=`az cosmosdb list-keys -n $COSMOS_DB_ACCOUNT -g $RESOURCE_GROUP | jq -r '."primaryMasterKey"'`
 
 #Generate new Azure Blob Storage 
-#az storage blob create --name $BLOB_CONTAINER_NAME
+az storage blob create --name $BLOB_CONTAINER_NAME
 #az storage blob delete --name $BLOB_CONTAINER_NAME
 export BLOB_STORAGE_KEY=`az storage account keys list -g $RESOURCE_GROUP -n $BLOB_STORAGE_ACCOUNT | jq -r '.[]| select(.keyName == "key1")|.value'`
 az storage container create --name $BLOB_CONTAINER_NAME --account-name $BLOB_STORAGE_ACCOUNT --account-key $BLOB_STORAGE_KEY
@@ -49,13 +49,13 @@ yq w -i -d1 cluster-deployment.yml 'data.blob-storage-con' $BLOB_CONTAINER_NAME
 
 #Generate new Azure Cognitive Services API for facial detection
 az cognitiveservices account create --name $COG_SERV_NAME --resource-group $RESOURCE_GROUP --kind Face --sku S0 -l $LOCATION
-#az cognitiveservices account delete --name $COG_SERV_NAME --resource-group $RESOURCE_GROUP
+az cognitiveservices account delete --name $COG_SERV_NAME --resource-group $RESOURCE_GROUP
 COG_SERV_KEY=`az cognitiveservices account keys list --name $COG_SERV_NAME --resource-group $RESOURCE_GROUP -o json | jq -r '.key1'`
 
 #Generate an Azure Container Registry and extract access credentials
 az acr create --name $CONTAINER_ACCOUNT --resource-group $RESOURCE_GROUP --sku Standard --location $LOCATION
 az acr update --name $CONTAINER_ACCOUNT --admin-enabled true
-az acr delete --name $CONTAINER_ACCOUNT --resource-group $RESOURCE_GROUP
+#az acr delete --name $CONTAINER_ACCOUNT --resource-group $RESOURCE_GROUP
 ACR_LOGIN_USERNAME=`az acr credential show --name $CONTAINER_ACCOUNT --output json | jq -r '.username'`
 ACR_LOGIN_KEY=`az acr credential show --name $CONTAINER_ACCOUNT --output json | jq -r '.passwords|.[0]|.value'`
 
@@ -84,12 +84,16 @@ CS_SECRET_NAME=cs-secrets
 #Login to Azure Kubernetes cluster
 az aks get-credentials --resource-group $RESOURCE_GROUP --name $AKSNAME
 
+## K8s cluster deployment configuration 
+export K8_CLUSTER_CONFIG="./cluster-deployment.yml"
+
 
 #Secret for Kubernetes Azure Container Registry
 kubectl create secret docker-registry $CR_SECRET_NAME --docker-server $ACR_URI --docker-email $YOUR_MAIL --docker-username=$ACR_LOGIN_USERNAME --docker-password $ACR_LOGIN_KEY
-kubectl create secret generic $BLOB_SECRET_NAME --from-literal=blob-storage-account=$STORAGE_ACCOUNT_NAME --from-literal=blob-storage-key=$STORAGE_ACCOUNT_KEY
+kubectl create secret generic $BLOB_SECRET_NAME --from-literal=blob-storage-account=$BLOB_STORAGE_ACCOUNT --from-literal=blob-storage-key=$BLOB_STORAGE_KEY
 kubectl create secret generic $DB_SECRET_NAME --from-literal=db-account=$COSMOS_DB_ACCOUNT --from-literal=db-key=$COSMOS_DB_KEY
-kubectl create secret generic $CS_SECRET_NAME -- from-literal=cs-account=$COG_SERV_NAME --from-literal=db-key=$COG_SERV_KEY
+kubectl create secret generic $CS_SECRET_NAME --from-literal=cs-account=$COG_SERV_NAME --from-literal=db-key=$COG_SERV_KEY
+kubectl create -f $K8_CLUSTER_CONFIG
 
 
 #az aks create --resource-group $RESOURCE_GROUP --name $AKS_NAME --node-count 1 --enable-addons monitoring --generate-ssh-keys
