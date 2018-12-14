@@ -62,7 +62,7 @@ def serveMainPage():
 def relabelImage(persona_name, img_id):
     print("labeling {0}".format(img_id))
     
-    session.execute("UPDATE " + persona_edge_table + " SET label_assoc_flag=%s WHERE persona_name=%s AND assoc_image_id=%s", (True, persona_name, img_id))
+    session.execute("UPDATE " + persona_edge_table + " SET label_v_predict_assoc_flag=%s WHERE persona_name=%s AND assoc_face_id=%s", (True, persona_name, img_id))
     
     return "Retrained!"
 
@@ -80,10 +80,10 @@ def servePersonaRawImg(img_id):
 #Profile page for an individual persona selected from the homepage
 @app.route('/persona/<string:persona_name>')
 def servePersonaPage(persona_name):
-    image_list = list(session.execute("SELECT assoc_image_id, label_assoc_flag FROM " + persona_edge_table + " WHERE persona_name=%s", (persona_name,)))
+    image_list = list(session.execute("SELECT assoc_face_id, label_v_predict_assoc_flag FROM " + persona_edge_table + " WHERE persona_name=%s", (persona_name,)))
     page_html = ""
     for image in image_list:
-        page_html += "<div><img src='img/{0}':image/jpeg;base64;+encoded_string></img>{1}<form action='label/{2}/{0}' method='post'><button type='submit'>retrain</button></form></div>".format(image.assoc_image_id, "labeled" if image.label_assoc_flag else "predicted", persona_name)
+        page_html += "<div><img src='img/{0}':image/jpeg;base64;+encoded_string></img>{1}<form action='label/{2}/{0}' method='post'><button type='submit'>retrain</button></form></div>".format(image.assoc_face_id, "labeled" if image.label_v_predict_assoc_flag else "predicted", persona_name)
     
     return page_html
 
