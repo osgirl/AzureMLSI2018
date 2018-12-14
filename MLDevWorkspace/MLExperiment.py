@@ -84,8 +84,8 @@ def detectExtractFace(image_name, image_bytes, cs_account_key):
     '''
 def main():
     logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
-    FORMAT = '%(asctime) %(message)s'
-    logging.basicConfig(format=FORMAT)
+    #FORMAT = '%(asctime) %(message)s'
+    #logging.basicConfig(format=FORMAT)
 
     cs_account_name = os.environ['COG_SERV_ACCOUNT']
     cs_account_key = os.environ['COG_SERV_KEY']
@@ -102,7 +102,7 @@ def main():
     vgg_face_feature_gen = VGGFace(include_top=False, input_shape=(img_width, img_height, 3), pooling='avg') # pooling: None, avg or max
 
     image_count = 0
-    source_dir = './TestImages'
+    source_dir = './TestImages2'
 
     def generateTransferFeatures(source_dir):
         face_labels = []
@@ -115,6 +115,7 @@ def main():
                 dir_components = Path(dir_path)
                 usage = dir_components.parts[len(dir_components.parts) - 1]
                 entity = dir_components.parts[len(dir_components.parts) - 2]
+                print(entity)
 
                 image_file = open(os.path.join(dir_path, file_name), 'rb').read()
                 hash = hashlib.md5(image_file).hexdigest()    
@@ -131,37 +132,55 @@ def main():
                 inputs_batch = imgPreprocessing(image_file)
                 #decoded_input.append(inputs_batch)
                 image_features.append(list(vgg_19_features_gen.predict(inputs_batch, batch_size=1).flat))
-                image_labels.append(entity)
+                image_labels.append(1 if entity == "Train" else 0)
                 face_features.append(list(vgg_face_feature_gen.predict(inputs_batch, batch_size=1).flat))
-                face_labels.append(entity)
+                face_labels.append(1 if entity == "Train" else 0)
         print("Generated features {0} {1} {2} {3} {4} {5}".format(len(image_features), len(image_features[0]), 
                                                             len(image_labels), len(face_features), 
                                                             len(face_features[0]), len(face_labels)))
         return (image_features, image_labels, face_features, face_labels)
     
-    (image_features, image_labels, face_features, face_labels) = generateTransferFeatures(source_dir)
+    #(image_features, image_labels, face_features, face_labels) = generateTransferFeatures(source_dir)
     temp_uri = "./feature_temp_file.pkl"
-    pickle.dump((image_features, image_labels, face_features, face_labels), open(temp_uri, 'wb'))
+    #pickle.dump((image_features, image_labels, face_features, face_labels), open(temp_uri, 'wb'))
     (image_features, image_labels, face_features, face_labels) = pickle.load(open(temp_uri, 'rb'))
+    
+    '''
     X_train, X_test, y_train, y_test = train_test_split(image_features, image_labels, test_size=0.2, random_state=0)
     
     dec_tree_class = tree.DecisionTreeClassifier()
     model = dec_tree_class.fit(X_train, y_train)
-    print(model.score(X_test, y_test))
+    logging.debug(model.score(X_test, y_test))
     
     knn_class = KNeighborsClassifier(n_neighbors=2)
     model = knn_class.fit(X_train, y_train)
-    print(model.score(X_test, y_test))
+    logging.debug(model.score(X_test, y_test))
+    '''
     
-    #base_model=MobileNet(weights='imagenet',include_top=False) #imports the mobilenet model and discards the last 1000 neuron layer.
-    base_model = VGG19(weights = "imagenet", include_top=False, input_shape = (img_width, img_height, 3))
-    x=base_model.output
-    x=GlobalAveragePooling2D()(x)
-    x=Dense(1024,activation='relu')(x) #we add dense layers so that the model can learn more complex functions and classify for better results.
-    x=Dense(1024,activation='relu')(x) #dense layer 2
-    x=Dense(512,activation='relu')(x) #dense layer 3
-    preds=Dense(120,activation='softmax')(x) #final layer with softmax activation
-    model=Model(inputs=base_model.input,outputs=preds)
+    features = np.array(face_features)
+    labels = np.array(face_labels)
+    model = Sequential()
+    model.add(Dense(1024, input_dim=512, activation='relu')) #we add dense layers so that the model can learn more complex functions and classify for better results.
+    model.add(Dense(1024,activation='relu')) #dense layer 2
+    model.add(Dense(512,activation='relu')) #dense layer 3
+    model.add(Dense(1,activation='softmax')) #final layer with softmax activation
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.fit(x=features, y=labels, epochs=1, batch_size=10)
+
+    '''
+    features = np.array(image_features)
+    labels = np.array(image_labels)
+    model = Sequential()
+    model.add(Dense(1024, input_dim=4*4*512, activation='relu')) #we add dense layers so that the model can learn more complex functions and classify for better results.
+    model.add(Dense(1024,activation='relu')) #dense layer 2
+    model.add(Dense(512,activation='relu')) #dense layer 3
+    model.add(Dense(1,activation='softmax')) #final layer with softmax activation
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.fit(x=features, y=labels, epochs=5, batch_size=10)
+    '''
+    
+    scores = model.evaluate(features, labels)
+    logging.debug("\n%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
     #generator = datagen.flow(
         #decoded_input,
         #target_size=(150, 150),
