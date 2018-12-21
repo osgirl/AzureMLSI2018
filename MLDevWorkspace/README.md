@@ -2,7 +2,7 @@
 
 Utilizing the following models.
 
-[Keras-VggFace](https://travis-ci.org/rcmalli/keras-vggface.svg?branch=master)](https://travis-ci.org/rcmalli/keras-vggface)
+[Keras-VggFace](https://travis-ci.org/rcmalli/keras-vggface)
 
 [Keras-Vgg19](https://github.com/keras-team/keras-applications)
 
