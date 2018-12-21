@@ -32,5 +32,5 @@ from keras import applications
 
 ## Azure Face API
 
-- Microsoft in house mode. 
+- Microsoft's inhouse machine learning model. 
 
