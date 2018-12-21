@@ -2,7 +2,7 @@
 
 Utilizing the following models.
 
-[Keras-VggFace](https://travis-ci.org/rcmalli/keras-vggface)
+[Keras-VggFace](https://github.com/rcmalli/keras-vggface)
 
 [Keras-Vgg19](https://github.com/keras-team/keras-applications)
 
@@ -21,6 +21,14 @@ Utilizing the following models.
 ## VGG19
 
 - Model trained on Imagenet dataset.
+
+### Note
+
+- Make sure to use:
+```
+from keras import applications
+```
+- The **keras-applications** python library seems to have issues. 
 
 ## Azure Face API
 
