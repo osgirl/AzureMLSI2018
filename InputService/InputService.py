@@ -16,52 +16,16 @@ import logging
 import sys
 
 import yaml
-import cv2
+
 import numpy as np
+import cv2
 
-#Loads the Python face detection classifiers from their local serialized forms
-cnn_face_classifier = cv2.dnn.readNetFromCaffe("deploy.prototxt.txt", "res10_300x300_ssd_iter_140000.caffemodel")
-classifier_uri = "./Face_cascade.xml"
-cascade_face_classifier = cv2.CascadeClassifier(classifier_uri)
 
-def detectExtractFace(image_bytes):
-    #Run the Cascade face detector
-    nparr = np.fromstring(image_bytes, np.uint8)
-    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR) # cv2.IMREAD_COLOR in OpenCV 3.1
-    image_grey=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
-    faces = cascade_face_classifier.detectMultiScale(image_grey,scaleFactor=1.16,minNeighbors=5,minSize=(25,25),flags=0) 
-    
-    #Run the CNN face detector
-    (h, w) = image.shape[:2] #Save off original image dimensions
-    blob = cv2.dnn.blobFromImage(cv2.resize(image, (300,300)), 1.0, (300, 300), (103.93, 116.77, 123.68))
-    cnn_face_classifier.setInput(blob)
-    detections = cnn_face_classifier.forward()
-    
-    #If Cascade identifies at least one face, use the cascade results to extract the faces
-    roi_images = []
-    federatedResult = 0
-    if len(faces) > 0:
-        federated_result = 2
-        for (x,y,w,h) in faces:
-            roi_image = image[y:(y+h), x:(x+w)]
-            roi_images.append(roi_image)
-    #Otherwise
-    else:
-        #Grab only first element from the CNN classifier
-        element = 1
-        confidence = detections[0,0,element,2]
-        if confidence > 0.95:
-            federatedResult = 1
-            box = detections[0, 0, element, 3:7] * np.array([w, h, w, h])
-            (startX, startY, endX, endY) = box.astype("int")
-            roi_image = image[startY, endY, startX, endX]
-            roi_images.append(roi_image)
-            
-    return roi_images
+import cognitive_face as CF
 
-def retrieveTestImageSample(bs_account_name, bs_account_key, bs_container):
+def getRawTestImagesFromBlobStore(bs_account_name, bs_account_key, bs_container):
     '''
-
+        Retrieves the raw entity images from the configured azure blob store and returns in a list
     '''
     
     blob_service = BlockBlobService(account_name=bs_account_name, account_key=bs_account_key, endpoint_suffix="core.windows.net")
@@ -75,18 +39,42 @@ def retrieveTestImageSample(bs_account_name, bs_account_key, bs_container):
     
     def byteGetter(blob):
         blob_bytes = blob_service.get_blob_to_bytes(bs_container, blob.name)
-        print(blob_bytes.content)
         return blob_bytes.content
     choice_blob_bytes = map(byteGetter, choice_blobs)
     
     return zip(choice_blobs, choice_blob_bytes)
 
-def testPopulateCassandraTables(choice_blobs, db_account_name, db_account_key, ca_file_uri, db_config):
+def processEntityImages(choice_blobs, db_account_name, db_account_key, ca_file_uri, db_config, cs_account, cs_key):
     '''
-    Populates configured CosmoDB Cassandra Tables with test data taken from the configured Azure
-    storage account
+    Tests entity images for the presence of a face using Azure Cognitive Services, extracts the face
+    based on the provided bounding box, applies the facial classifier if available and then
+    writes the raw image, face to CosmosDB
     '''
 
+    #Initialize the cognitive services account to perform facial detection
+    BASE_CS_URL = 'https://virginia.api.cognitive.microsoft.us/face/v1.0/'  # Replace with your regional Base URL
+    CF.Key.set(cs_key)
+    CF.BaseUrl.set(BASE_CS_URL)
+    
+    def extractFace(image_bytes):
+        '''
+        
+        '''
+        face_list = CF.face.detect(image_bytes)
+        
+        if len(face_list) == 1:
+            face_rectangle = face_list[0]['faceRectangle']
+            nparr = np.fromstring(image_bytes, np.uint8)
+            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR) # cv2.IMREAD_COLOR in OpenCV 3.1
+            face_iso_image = image[face_rectangle['top']:face_rectangle['top'] + face_rectangle['height'], 
+                face_rectangle['left']:face_rectangle['left'] + face_rectangle['width']]
+            return face_iso_image
+        else:
+            return None
+    #Add the extracted face or none object to the end of the blob name and bytes tuple
+    blob_image_faces = list(map(lambda blob_tuple: (blob_tuple[0], blob_tuple[1], extractFace(blob_tuple[1])), choice_blobs))
+
+    #Connect to the database
     ssl_opts = {
         'ca_certs': ca_file_uri,
         'ssl_version': PROTOCOL_TLSv1_2,
@@ -100,61 +88,57 @@ def testPopulateCassandraTables(choice_blobs, db_account_name, db_account_key, c
     if db_config is None:
         keyspace = os.environ['DB_KEYSPACE']
         personaTableName = os.environ['DB_PERSONA_TABLE']
-        personaEdgeTableName = os.environ['DB_PERSONA_EDGE_TABLE']
+        personaTableName = os.environ['DB_SUB_PERSONA_TABLE']
+        personaEdgeTableName = os.environ['DB_SUB_PERSONA_EDGE_TABLE']
         rawImageTableName = os.environ['DB_RAW_IMAGE_TABLE']
         refinedImageTableName = os.environ['DB_REFINED_IMAGE_TABLE']
     #Otherwise load db config
     else:
         keyspace = db_config['db-keyspace']
         personaTableName = db_config['db-persona-table']
-        personaEdgeTableName = db_config['db-persona-edge-table']
+        subPersonaTableName = db_config['db-sub-persona-table']
+        subPersonaEdgeTableName = db_config['db-sub-persona-edge-table']
         rawImageTableName = db_config['db-raw-image-table']
         refinedImageTableName = db_config['db-refined-image-table']
 
+    #Prepare Cosmos DB session and insertion queries
     session = cluster.connect(keyspace);   
-
-    #Iterates through labeled presidential images in a provided directory, extracts the label from 
-    #the filename, and adds them as (randomly) labeled or unlabeled to the database
     personaInsertQuery = session.prepare("INSERT INTO " + personaTableName + " (persona_name) VALUES (?)")
-    personaEdgeInsertQuery = session.prepare("INSERT INTO " + personaEdgeTableName + " (persona_name, assoc_face_id, label_v_predict_assoc_flag) VALUES (?,?,?)")
+    subPersonaInsertQuery = session.prepare("INSERT INTO " + subPersonaTableName + " (sub_persona_name, persona_name) VALUES (?, ?)")
+    subPersonaEdgeInsertQuery = session.prepare("INSERT INTO " + subPersonaEdgeTableName + " (sub_persona_name, assoc_face_id, label_v_predict_assoc_flag) VALUES (?,?,?)")
     rawInsertQuery = session.prepare("INSERT INTO " + rawImageTableName + " (image_id, refined_image_edge_id, file_uri, image_bytes) VALUES (?,?,?,?)")
     refinedInsertQuery = session.prepare("INSERT INTO " + refinedImageTableName + " (image_id, raw_image_edge_id, image_bytes) VALUES (?,?,?)")
     
-    
-    for (blob, blob_bytes) in choice_blobs:
-        file_name = blob.name
-        (entity, usage, number) = file_name.split('-')
+    for (blob, image_bytes, face_bytes) in blob_image_faces:
+        if face_bytes is not None:
+            file_name = blob.name
+            (entity, usage, number) = file_name.split('-')
         
-        #For each image extract the label and use to generate a persona, redundant writes will cancel out
-        image_bytes = blob_bytes;
-        face_list = detectExtractFace(image_bytes)
-        
-        #Write only if faces are found
-        if len(face_list) > 0:
-            logging.debug("Face found in image {0}, writing to database".format(file_name))
+            #For each image extract the label and use to generate a persona, redundant writes will cancel out
+            
+            #Writes the entity label to the persona table 
+            #For the time being also write the entity label to the subpersona table and associate with the persona table
+            session.execute(personaInsertQuery, (entity,))
+            session.execute(subPersonaInsertQuery, (entity, entity))
+            
+            #Writes the raw image to its table
             hashed_bytes = hashlib.md5(image_bytes).digest()
             hashed_bytes_int = int.from_bytes(hashed_bytes, byteorder='big') #Good identifier, sadly un
             image_hash = str(hashed_bytes_int) #Stupid workaround to Python high precision int incompatability
-            
-            #Writes the entity label to the DB, will overwrite for identical labels
-            session.execute(personaInsertQuery, (entity,))
-            
-            #Writes an individual image to the DB
-            session.execute(rawInsertQuery, (image_hash, "", file_name, image_bytes))
+            #session.execute(rawInsertQuery, (image_hash, "", file_name, image_bytes))
             
             #Write each face extracted from the image to the DB as a refined image
-            for face_bytes in face_list:
-                face_bytes = cv2.imencode(".jpg", face_bytes)[1]
-                face_hash_bytes = hashlib.md5(face_bytes).digest()
-                face_hashed_bytes_int = int.from_bytes(face_hash_bytes, byteorder='big') #Good identifier, sadly un
-                face_hash = str(face_hashed_bytes_int) #Stupid workaround to Python high precision int incompatability
-                session.execute(refinedInsertQuery, (face_hash, image_hash, face_bytes))
+            face_bytes = cv2.imencode(".jpg", face_bytes)[1]
+            face_hash_bytes = hashlib.md5(face_bytes).digest()
+            face_hashed_bytes_int = int.from_bytes(face_hash_bytes, byteorder='big') #Good identifier, sadly un
+            face_hash = str(face_hashed_bytes_int) #Stupid workaround to Python high precision int incompatability
+            session.execute(refinedInsertQuery, (face_hash, image_hash, face_bytes))
+            logging.debug("Writing face to DB {0}".format(face_hash))
             
-            #Writes an associative edge between the entity and raw and refined images that come from labeled training data
-            #Usage is conveyed from the filename that was used to load the image into cluster storage
+            #If the data is part of the training set, write edges between the sub-personas, face images
             if usage == "Train":
-                session.execute(personaEdgeInsertQuery, (entity, image_hash, True))
-                session.execute(personaEdgeInsertQuery, (entity, face_hash, True))
+                session.execute(subPersonaEdgeInsertQuery, (entity, face_hash, True))
+            #Otherwise do not write an edge, these will be predicted later by the training service
 
 def main ():
     logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -163,44 +147,51 @@ def main ():
     
     #Check if the blob storage access credentials have been loaded as a secret volume use them
     if os.path.exists('/tmp/secrets/bs/blob-storage-account'):
-        bs_account_name = open('/tmp/secrets/bs/blob-storage-account').read()
-        bs_account_key = open('/tmp/secrets/bs/blob-storage-key').read()
+        bs_account = open('/tmp/secrets/bs/blob-storage-account').read()
+        bs_key = open('/tmp/secrets/bs/blob-storage-key').read()
         logging.debug('Loaded db secrets from secret volume')
 
-        db_account_name = open('/tmp/secrets/db/db-account').read()
-        db_account_key = open('/tmp/secrets/db/db-key').read()
+        db_account = open('/tmp/secrets/db/db-account').read()
+        db_key = open('/tmp/secrets/db/db-key').read()
         logging.debug('Loaded db secrets from secret volume')
+        
+        #Load cognitive service credentials
+        cs_account = open('/tmp/secrets/cs/cs-account').read()
+        cs_key = open('/tmp/secrets/cs/cs-key').read()
+        logging.debug('')
 
         
     #Otherwise assume it is being run locally and load from environment variables
     else: 
-        bs_account_name = os.environ['AZ_BS_ACCOUNT_NAME']
-        bs_account_key = os.environ['AZ_BS_ACCOUNT_KEY']
-        logging.debug('Loaded db secrets from test environment variables')
+        bs_account = os.environ['BLOB_STORAGE_ACCOUNT']
+        bs_key = os.environ['BLOB_STORAGE_KEY']
         
-        db_account_name = os.environ['AZ_DB_ACCOUNT_NAME']
-        db_account_key = os.environ['AZ_DB_ACCOUNT_KEY']
-
+        db_account = os.environ['COSMOS_DB_ACCOUNT']
+        db_key = os.environ['COSMOS_DB_KEY']
+        
+        #Load cognitive service credentials
+        cs_account = os.environ['COG_SERV_ACCOUNT']
+        cs_key = os.environ['COG_SERV_KEY']
 
     #If the test container is not loaded as an environment variable, assume a local run
     #and use the configuration information in the deployment config
     if 'BS_TEST_CON' in os.environ:
-        bs_container = os.environ['BS_TEST_CON']
+        bs_container_name = os.environ['BS_TEST_CON']
         db_config = None
     else:
         merged_config = yaml.safe_load_all(open("../cluster-deployment.yml"))
         for config in merged_config:
             print(config)
             if config['metadata']['name'] == 'azmlsi-bs-config':
-                bs_container = config['data']['az-bs-test-dir']
+                bs_container_name = config['data']['blob-storage-con']
             if config['metadata']['name'] == 'azmlsi-db-config':
                 db_config  = config['data']
     
     ca_file_uri = "./cacert.pem"
 
 
-    choice_blobs = retrieveTestImageSample(bs_account_name, bs_account_key, bs_container)
-    testPopulateCassandraTables(choice_blobs, db_account_name, db_account_key, ca_file_uri, db_config)
+    choice_blobs = getRawTestImagesFromBlobStore(bs_account, bs_key, bs_container_name)
+    processEntityImages(choice_blobs, db_account, db_key, ca_file_uri, db_config, cs_account, cs_key)
     
 if __name__ == '__main__':
     '''

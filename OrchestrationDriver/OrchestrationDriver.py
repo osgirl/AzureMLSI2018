@@ -12,16 +12,6 @@ https://github.com/Azure-Samples/container-instances-python-manage
 '''
 from utilities import AzureContext
 from azure.storage.blob import BlockBlobService, PublicAccess
-#from azure.common.credentials import ServicePrincipalCredentials
-
-from azure.mgmt.resource import ResourceManagementClient
-from azure.mgmt.containerinstance import ContainerInstanceManagementClient
-from azure.mgmt.containerinstance.models import (ContainerGroup, Container, ContainerPort, Port, IpAddress, 
-                                                 ResourceRequirements, ResourceRequests, ContainerGroupNetworkProtocol, OperatingSystemTypes)
-#from azure.mgmt.containerregistry import ContainerRegistryManagementClient
-from azure.mgmt.containerregistry.v2018_09_01.container_registry_management_client import ContainerRegistryManagementClient
-from azure.mgmt.containerregistry.v2018_09_01.models import Registry
-from azure.mgmt.containerregistry.v2018_09_01.models import ImportImageParameters, ImportSource
 
 from cassandra.cluster import Cluster
 from cassandra.auth import PlainTextAuthProvider
@@ -80,7 +70,8 @@ def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_con
 
     keyspace = db_config['db-keyspace']
     persona_table_name = db_config['db-persona-table']
-    persona_edge_table_name = db_config['db-persona-edge-table']
+    sub_persona_table_name = db_config['db-sub-persona-table']
+    sub_persona_edge_table_name = db_config['db-sub-persona-edge-table']
     raw_image_table_name = db_config['db-raw-image-table']
     refined_image_table_name = db_config['db-refined-image-table']
     log_table_name = db_config['db-log-table']
@@ -88,7 +79,8 @@ def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_con
     #Create table
     print("\nCreating Table")
     session.execute('DROP TABLE IF EXISTS ' + persona_table_name)
-    session.execute('DROP TABLE IF EXISTS ' + persona_edge_table_name)
+    session.execute('DROP TABLE IF EXISTS ' + sub_persona_table_name)
+    session.execute('DROP TABLE IF EXISTS ' + sub_persona_edge_table_name)
     session.execute('DROP TABLE IF EXISTS ' + raw_image_table_name)
     session.execute('DROP TABLE IF EXISTS ' + refined_image_table_name)
     session.execute('DROP TABLE IF EXISTS ' + log_table_name)
@@ -97,9 +89,12 @@ def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_con
     #This table is set up primarily to be scanned and used to pivot to the persona edge table to discover images 
     session.execute('CREATE TABLE IF NOT EXISTS ' + persona_table_name + ' (persona_name text, PRIMARY KEY(persona_name))');
     
+    #
+    session.execute('CREATE TABLE IF NOT EXISTS ' + sub_persona_table_name + ' (sub_persona_name text, persona_name text, PRIMARY KEY(sub_persona_name))');
+    
     #Persona edge table contains the associations to pivot from a selected persona to its associated images
     #These associations can exist either due to explicit labeling or predicted labels
-    session.execute('CREATE TABLE IF NOT EXISTS ' + persona_edge_table_name + ' (persona_name text, assoc_face_id text, label_v_predict_assoc_flag boolean, PRIMARY KEY(persona_name, assoc_face_id))');
+    session.execute('CREATE TABLE IF NOT EXISTS ' + sub_persona_edge_table_name + ' (sub_persona_name text, assoc_face_id text, label_v_predict_assoc_flag boolean, PRIMARY KEY(sub_persona_name, assoc_face_id))');
     
     #Refined table stores extracted face blobs and associative edges to the raw image from which it was derived
     session.execute('CREATE TABLE IF NOT EXISTS ' + refined_image_table_name + ' (image_id text, raw_image_edge_id text, image_bytes blob, PRIMARY KEY(image_id))');
@@ -132,11 +127,16 @@ def generateAzureInputStore(bs_config, stor_name, stor_key, source_dir):
             entity = dir_components.parts[len(dir_components.parts) - 2]
             
             image_file = open(os.path.join(dir_path, file_name), 'rb').read()
-            hash = hashlib.md5(image_file).hexdigest()    
             
+            #Calculates image hash, infers the purpose of an image from its folder position and generate a filename
+            hash = hashlib.md5(image_file).hexdigest()    
             blob_name = usage + "-" + entity + "-" + str(hash)
+            
+            #Uploads to the Azure Blob Store
             block_blob_service.create_blob_from_path(bs_dir_name, blob_name, dir_path + "/" + file_name)
             logging.debug("File written to blob container {0} from {1} {2}".format(bs_dir_name, os.path.join(dir_path, file_name), blob_name))
+            
+            #Renames the image in place
             os.rename(os.path.join(dir_path, file_name), os.path.join(dir_path, blob_name))
             logging.debug("Renamed {0} to {1}".format(os.path.join(dir_path, file_name), os.path.join(dir_path, blob_name)))
 

@@ -26,6 +26,10 @@ from sklearn.model_selection import train_test_split
 
 import pickle
 from tensorboard.plugins.beholder.shared_config import IMAGE_WIDTH
+from cv2 import imdecode
+
+import onnxmltools
+from azureml.core import Workspace
 
 #Loads the Python face detection classifiers from their local serialized forms
 cnn_face_classifier = cv2.dnn.readNetFromCaffe("deploy.prototxt.txt", "res10_300x300_ssd_iter_140000.caffemodel")
@@ -99,10 +103,123 @@ def imgPreprocessing(image_file):
     #logging.debug("Converted image from {0} to {1}".format(image.shape, decoded.shape))
     return decoded
 
+def faceLoader(source_dir):
+    #Runs through test images in a standardized file structure with the usage (Train, Validation) or Entity (2+ class labels)
+    general_images = []
+    general_features = []
+    general_labels = []
+    
+    face_images = []
+    face_iso_images = []
+    face_iso_features = []
+    face_features = []
+    face_labels = []
+    for dir_path, dir_names, file_names in os.walk(source_dir, topdown=True):
+        for file_name in file_names:
+            #Break the directory apart to retrieve whether the image is training/validation and the entity name
+            dir_components = Path(dir_path)
+            usage = dir_components.parts[len(dir_components.parts) - 2]
+            entity = dir_components.parts[len(dir_components.parts) - 1]
+            logging.debug(entity)
+            logging.debug(usage)
+            
+            #For training data break into various data samples
+            if usage == "Train":
+                image_file = open(os.path.join(dir_path, file_name), 'rb').read()
+                hash = hashlib.md5(image_file).hexdigest()    
+
+                #Ensure that a single face exists in this set
+                face_list = CF.face.detect(image_file)
+                if len(face_list) == 1:
+                    #stuff = CF.person.add_face(image_file, group_name, person_id)
+                    face_images.append(image_file)
+                    inputs_batch = imgPreprocessing(image_file)
+                    face_features.append(vgg_face_feature_gen.predict(inputs_batch, batch_size=1).flatten())
+                    face_labels.append(entity)
+                    
+                    face_rectangle = face_list[0]['faceRectangle']
+                    nparr = np.fromstring(image_file, np.uint8)
+                    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR) # cv2.IMREAD_COLOR in OpenCV 3.1
+                    face_iso_image = image[face_rectangle['top']:face_rectangle['top'] + face_rectangle['height'], face_rectangle['left']:face_rectangle['left'] + face_rectangle['width']]
+                    face_iso_images.append(face_iso_image)
+                    #cv2.imwrite(os.path.join(".", hash + ".jpg"), face_iso_image)
+                    
+                    #
+                    decoded = cv2.resize(face_iso_image, (img_width,img_height))
+                    decoded = decoded.reshape((1,img_width,img_height,3))
+                    face_iso_features.append(vgg_face_feature_gen.predict(decoded, batch_size=1).flatten())
+                else:
+                    open(os.path.join(".", hash + ".jpg"), 'wb').write(image_file)
+                    
+                inputs_batch = imgPreprocessing(image_file)
+                general_images.append(image_file)
+                general_features.append(vgg_19_feature_gen.predict(inputs_batch, batch_size=1).flatten())
+                general_labels.append(entity)
+            
+    return (general_images, general_features, general_labels, face_images, face_features, face_iso_image, face_iso_features, face_labels)
+
+def testCognitiveServiceFaceRecognition(images, labels):
+    '''
+    
+    '''
+    KEY = 'd7bb7b429dce4441a8f39b9f92088950'  # Replace with a valid subscription key (keeping the quotes in place).
+    CF.Key.set(KEY)
+
+    BASE_URL = 'https://eastus.api.cognitive.microsoft.com/face/v1.0'  # Replace with your regional Base URL
+    CF.BaseUrl.set(BASE_URL)
+    
+    group_name = 'default'
+    #Checks to see if a "default" person group has been created, and creates one of not
+    if group_name not in map(lambda x: x['personGroupId'], CF.person_group.lists()) :
+        CF.person_group.create(group_name, group_name)
+
+    def wipePersonsInGroup(group_name):
+        logging.debug("Wiping people entries in group {0}".format(group_name))
+        for person in CF.person.lists(group_name):
+            logging.debug(person)
+            CF.person.delete(group_name, person['personId'])   #for element in set(labels):
+    
+    def wipeFaces(group_name):
+        logging.debug("Wiping faces in group {0}".format(group_name))
+        for face in CF.face_list.lists():
+            logging.debug(face)
+    
+    wipePersonsInGroup(group_name)
+    wipeFaces(group_name)
+    
+    person_dict = {}
+    for person in set(labels):
+        logging.debug(person)
+        person_dict[person] = CF.person.create(group_name, person)
+    
+    for image, person in zip(images, labels):
+        nparr = np.fromstring(image, np.uint8)
+        #CF.person.add_face(image, group_name, person_dict[person])
+        file_handle.close()
+        break
+    
+    CF.person_group.train(group_name)
+    
+    #for image, label in zip(ima)
+        
+def setUpAzureMLWorkspace(subscription_id, resource_group, location):
+    ws = Workspace.create(name='myworkspace',
+        subscription_id=subscription_id,    
+        resource_group=resource_group,
+        location=location # Or other supported Azure region  
+        )  
+    ws.write_config("azure_ml.cfg")
+    
+
 def main():
     logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
     #FORMAT = '%(asctime) %(message)s'
     #logging.basicConfig(format=FORMAT)
+
+    subscription_id = "0b753943-9062-4ec0-9739-db8fb455aeba"
+    resource_group = "CommercialCyberAzure"
+    location = "eastus"
+    setUpAzureMLWorkspace(subscription_id, resource_group, location)
 
     cs_account_name = os.environ['COG_SERV_ACCOUNT']
     cs_account_key = os.environ['COG_SERV_KEY']
@@ -110,130 +227,17 @@ def main():
     datagen = ImageDataGenerator(rescale=1./255)
     batch_size = 1
     sample_size = 1
-
-
-    def generateTransferFeatures(source_dir):
-        face_labels = []
-        face_features = []
-        image_labels = []
-        image_features = []
-        decoded_input = []
-        for dir_path, dir_names, file_names in os.walk(source_dir, topdown=True):
-            for file_name in file_names:
-                dir_components = Path(dir_path)
-                usage = dir_components.parts[len(dir_components.parts) - 1]
-                entity = dir_components.parts[len(dir_components.parts) - 2]
-
-                image_file = open(os.path.join(dir_path, file_name), 'rb').read()
-                hash = hashlib.md5(image_file).hexdigest()    
-                
-                #detectExtractFace(file_name, image_file, cs_account_key)
-                
-                nparr = np.fromstring(image_file, np.uint8)
-                #decoded_input.append(inputs_batch)
-
-                
-                
-                image_features.append(list(vgg_19_features_gen.predict(inputs_batch, batch_size=1).flat))
-                image_labels.append(1 if entity == "Train" else 0)
-                face_features.append(list(vgg_face_feature_gen.predict(inputs_batch, batch_size=1).flat))
-                face_labels.append(1 if entity == "Train" else 0)
-        print("Generated features {0} {1} {2} {3} {4} {5}".format(len(image_features), len(image_features[0]), 
-                                                            len(image_labels), len(face_features), 
-                                                            len(face_features[0]), len(face_labels)))
-        return (image_features, image_labels, face_features, face_labels)
     
-    def faceLoader(source_dir):
-        #Runs through test images in a standardized file structure with the usage (Train, Validation) or Entity (2+ class labels)
-        general_images = []
-        general_features = []
-        general_labels = []
-        
-        face_images = []
-        face_iso_images = []
-        face_iso_features = []
-        face_features = []
-        face_labels = []
-        for dir_path, dir_names, file_names in os.walk(source_dir, topdown=True):
-            for file_name in file_names:
-                dir_components = Path(dir_path)
-                usage = dir_components.parts[len(dir_components.parts) - 2]
-                entity = dir_components.parts[len(dir_components.parts) - 1]
-                logging.debug(entity)
-                logging.debug(usage)
-                
-                if usage == "Train":
-                    image_file = open(os.path.join(dir_path, file_name), 'rb').read()
-                    hash = hashlib.md5(image_file).hexdigest()    
-
-                    #Ensure that a single face exists in this set
-                    face_list = CF.face.detect(image_file)
-                    print(face_list)
-                    if len(face_list) == 1:
-                        #stuff = CF.person.add_face(image_file, group_name, person_id)
-                        face_images.append(image_file)
-                        inputs_batch = imgPreprocessing(image_file)
-                        face_features.append(vgg_face_feature_gen.predict(inputs_batch, batch_size=1).flatten())
-                        face_labels.append(entity)
-                        
-                        face_rectangle = face_list[0]['faceRectangle']
-                        nparr = np.fromstring(image_file, np.uint8)
-                        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR) # cv2.IMREAD_COLOR in OpenCV 3.1
-                        face_iso_image = image[face_rectangle['top']:face_rectangle['top'] + face_rectangle['height'], face_rectangle['left']:face_rectangle['left'] + face_rectangle['width']]
-                        face_iso_images.append(face_iso_image)
-                        #cv2.imwrite(os.path.join(".", hash + ".jpg"), face_iso_image)
-                        
-                        #
-                        decoded = cv2.resize(face_iso_image, (img_width,img_height))
-                        decoded = decoded.reshape((1,img_width,img_height,3))
-                        face_iso_features.append(vgg_face_feature_gen.predict(decoded, batch_size=1).flatten())
-                    else:
-                        open(os.path.join(".", hash + ".jpg"), 'wb').write(image_file)
-                        
-                    inputs_batch = imgPreprocessing(image_file)
-                    general_images.append(image_file)
-                    general_features.append(vgg_19_feature_gen.predict(inputs_batch, batch_size=1).flatten())
-                    general_labels.append(entity)
-                
-        return (general_images, general_features, general_labels, face_images, face_features, face_iso_image, face_iso_features, face_labels)
-
-    def stageCognitiveServiceFaceRecognition(source_dir):
-        '''
-        
-        '''
-        
-        KEY = 'd7bb7b429dce4441a8f39b9f92088950'  # Replace with a valid subscription key (keeping the quotes in place).
-        CF.Key.set(KEY)
-
-        BASE_URL = 'https://eastus.api.cognitive.microsoft.com/face/v1.0'  # Replace with your regional Base URL
-        CF.BaseUrl.set(BASE_URL)
-        
-        
-        #CF.person_group.
-        
-        #Checks to see if a "default" person group has been created, and creates one of not
-        group_name = 'default'
-        if group_name not in map(lambda x: x['personGroupId'], CF.person_group.lists()) :
-            CF.person_group.create(group_name, group_name)
-
-
     source_dir = './TestImages2'
-    KEY = 'd7bb7b429dce4441a8f39b9f92088950'  # Replace with a valid subscription key (keeping the quotes in place).
-    CF.Key.set(KEY)
-
-    BASE_URL = 'https://eastus.api.cognitive.microsoft.com/face/v1.0'  # Replace with your regional Base URL
-    CF.BaseUrl.set(BASE_URL)
-
     temp_uri = "./feature_temp_file.pkl"
-    (general_images, general_features, general_labels, face_images, face_features, face_iso_image, face_iso_features, face_labels) = faceLoader(source_dir)
-    pickle.dump((general_images, general_features, general_labels, face_images, face_features, face_iso_image, face_iso_features, face_labels), open(temp_uri, 'wb'))
+    #(general_images, general_features, general_labels, face_images, face_features, face_iso_image, face_iso_features, face_labels) = faceLoader(source_dir)
+    #pickle.dump((general_images, general_features, general_labels, face_images, face_features, face_iso_image, face_iso_features, face_labels), open(temp_uri, 'wb'))
 
     (general_images, general_features, general_labels, face_images, face_features, face_iso_image, face_iso_features, face_labels) = pickle.load(open(temp_uri, 'rb'))
     unique_labels = list(set(face_labels)) #Get list of unique labels
-    face_labels = list(map(lambda label: unique_labels.index(label), face_labels))
-    general_labels = list(map(lambda label: unique_labels.index(label), general_labels))
-    #stageCognitiveServiceFaceRecognition(source_dir)
-    #(image_features, image_labels, face_features, face_labels) = pickle.load(open(temp_uri, 'rb'))
+    #testCognitiveServiceFaceRecognition(face_images, face_labels)
+    
+    
     
     '''
     X_train, X_test, y_train, y_test = train_test_split(image_features, image_labels, test_size=0.2, random_state=0)
@@ -247,6 +251,7 @@ def main():
     logging.debug(model.score(X_test, y_test))
     '''
 
+
     def testFaceTransferNN(features, labels):
         model = Sequential()
         model.add(Dense(1024, input_dim=512, activation='relu')) #we add dense layers so that the model can learn more complex functions and classify for better results.
@@ -257,29 +262,32 @@ def main():
         model.fit(x=features, y=labels, epochs=5, batch_size=10)
         scores = model.evaluate(features, labels)
         logging.debug("\n%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
+        return model
+
+    def testGenTransferNN(features, labels):
+        model = Sequential()
+        model.add(Dense(1024, input_dim=4*4*512, activation='relu')) #we add dense layers so that the model can learn more complex functions and classify for better results.
+        model.add(Dense(1024,activation='relu')) #dense layer 2
+        model.add(Dense(512,activation='relu')) #dense layer 3
+        model.add(Dense(1,activation='sigmoid')) #final layer with softmax activation
+        model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+        model.fit(x=features, y=labels, epochs=5, batch_size=10)
+
+    face_numeric_labels = list(map(lambda label: unique_labels.index(label), face_labels)) #Translate string labels to numeric to work with Keras
+    
     features = np.array(face_iso_features)
-    labels = np.array(face_labels)
-    testFaceTransferNN(features, labels)
+    labels = np.array(face_numeric_labels)
+    model = testFaceTransferNN(features, labels)
+    onnx_model = onnxmltools.convert_keras(model)
+    onnxmltools.utils.save_model(onnx_model, 'example.onnx')
+   
 
     features = np.array(face_features)
-    labels = np.array(face_labels)
-    testFaceTransferNN(features, labels)
-    '''
-    features = np.array(general_features)
-    labels = np.array(general_labels)
-    model = Sequential()
-    model.add(Dense(1024, input_dim=4*4*512, activation='relu')) #we add dense layers so that the model can learn more complex functions and classify for better results.
-    model.add(Dense(1024,activation='relu')) #dense layer 2
-    model.add(Dense(512,activation='relu')) #dense layer 3
-    model.add(Dense(1,activation='sigmoid')) #final layer with softmax activation
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-    model.fit(x=features, y=labels, epochs=5, batch_size=10)
-    '''
+    labels = np.array(face_numeric_labels)
+    #testFaceTransferNN(features, labels)
     
-    #generator = datagen.flow(
-        #decoded_input,
-        #target_size=(150, 150),
-        #batch_size=batch_size)
+    features = np.array(general_features)
+    labels = np.array(face_numeric_labels)
     
     '''
     i = 0

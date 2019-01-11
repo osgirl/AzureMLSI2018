@@ -1,0 +1,85 @@
+<!doctype html>
+<html class="no-js" lang="">
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <title>Booz Allen Deployable ML Demonstration</title>
+  <meta name="description" content="">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<!--  
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/normalize.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+-->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}" crossorigin="anonymous">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/onepage.min.css') }}" crossorigin="anonymous">
+</head>
+
+<body>
+  <!--[if lte IE 9]>
+    <p class="browserupgrade">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience and security.</p>
+  <![endif]-->
+  
+  <nav class="navbar navbar-expand-lg navbar-dark navbar-custom fixed-top">
+  <div class="container">
+	<a class="navbar-brand" href="#">Start Bootstrap</a>
+	<button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
+	  <span class="navbar-toggler-icon"></span>
+	</button>
+	<div class="collapse navbar-collapse" id="navbarResponsive">
+	  <ul class="navbar-nav ml-auto">
+		<li class="nav-item">
+		  <a class="nav-link" href="#">Entity Index Home</a>
+		</li>
+		<li class="nav-item">
+		  <a class="nav-link" href="#">Submit New Image/Entity</a>
+		</li>
+	  </ul>
+	</div>
+  </div>
+</nav>
+
+  <!-- Add your site or application content here -->
+   <section>
+      <div class="container">
+        <div class="row align-items-center">
+          <div class="col order-lg-1">
+            <div class="p-5">
+              <h2 class="display-4">Entity Index Home</h2>
+              <p>List of entities loaded with labeled images into the prototype database</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+	{% for persona, image_url, number_of_labeled, number_of_predicted in persona_profiles_list %}
+	<section>
+	  <div class="container">
+		<div class="row align-items-center">
+		  <div class="col order-lg-1">
+			<div class="p-5">
+			  <h2 class="display-4">{{persona}} {{number_of_labeled}} {{number_of_predicted}}</h2>
+			</div>
+		  </div>
+		  <div class="col order-lg-1">
+			<div class="p-5">
+			  <p>Awesome entity</p>
+			  <a href=entities/{{persona}}>
+				  <img src="{{image_url}}" heigh="150" width="150"/>
+			  </a>
+			</div>
+		  </div>
+		</div>
+	  </div>
+	</section>
+	{% endfor %}    
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.8.3/modernizr.js"></script>
+  <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.6/umd/popper.min.js" integrity="sha384-wHAiFfRlMFy6i5SRaxvfOCifBUQy1xHdJ/yoi7FRNXMRBu5WHdZYu1hA6ZOblgut" crossorigin="anonymous"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/js/bootstrap.min.js" integrity="sha384-B0UglyR+jN6CkvvICOB2joaf5I4l3gm9GU6Hc1og6Ls7i6U/mkkaduKaBhlAXv9k" crossorigin="anonymous"></script>
+</body>
+
+</html>
