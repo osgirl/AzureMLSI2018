@@ -1,0 +1,15 @@
+azure-storage-file>=1.0
+azure-storage-blob>=1.0
+azure-common>=1.1.15
+azure-mgmt-containerregistry>=1.0
+azure-mgmt-resource>=1.1.0
+azure-mgmt-containerinstance==1.1.0
+azure-cosmos>=1.0.0
+cassandra-driver>=1.0.0
+tensorflow-gpu>=1.12
+keras>=2.2.4
+Scikit-learn>=0.20
+Opencv-python>=3.4.1
+cognitive_face>=1.4
+keras_vggface
+
