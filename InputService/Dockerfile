@@ -1,10 +1,15 @@
-FROM kkdai/docker-python3-opencv-face_recognition
+FROM tensorflow/serving:latest
 RUN mkdir /InputService
 ADD ./requirements.txt ./InputService/requirements.txt
-RUN CASS_DRIVER_NO_CYTHON=1 pip install -r ./InputService/requirements.txt
+ADD ./install.sh ./InputService/install.sh
+
+
 
 COPY . /InputService
-RUN ls ./InputService
 WORKDIR /InputService
-ENTRYPOINT ["python"]
-CMD ["InputService.py"]
+RUN ./install.sh
+RUN CASS_DRIVER_NO_CYTHON=1 pip3 install -r ./requirements.txt
+COPY ./models.py /usr/local/lib/python3.5/dist-packages/keras_vggface/
+RUN ls .
+ENTRYPOINT ["sh"]
+CMD ["python InputService.py"]
