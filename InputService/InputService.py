@@ -16,12 +16,36 @@ import logging
 import sys
 
 import yaml
+import io
 
 import numpy as np
-import cv2
-
+#import cv2
 
 import cognitive_face as CF
+from PIL import Image
+
+from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
+
+from keras.models import Sequential
+from keras.layers import Conv2D, MaxPooling2D
+from keras.layers import Activation, Dropout, Flatten, Dense
+
+from keras import backend as K
+from keras.applications import VGG19
+from keras_vggface.vggface import VGGFace
+
+from keras.applications import imagenet_utils
+
+import avro.schema
+import avro.io
+from matplotlib.transforms import blended_transform_factory
+
+import math
+
+img_width = 300
+img_height = 300
+vgg_face_feature_gen = VGGFace(include_top=False, input_shape=(img_width, img_height, 3), pooling='avg') # pooling: None, avg or max
+schema = avro.schema.Parse(open("./VGGFaceFeatures.avsc", "rb").read())
 
 def getRawTestImagesFromBlobStore(bs_account_name, bs_account_key, bs_container):
     '''
@@ -65,9 +89,10 @@ def processEntityImages(choice_blobs, db_account_name, db_account_key, ca_file_u
         if len(face_list) == 1:
             face_rectangle = face_list[0]['faceRectangle']
             nparr = np.fromstring(image_bytes, np.uint8)
-            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR) # cv2.IMREAD_COLOR in OpenCV 3.1
-            face_iso_image = image[face_rectangle['top']:face_rectangle['top'] + face_rectangle['height'], 
-                face_rectangle['left']:face_rectangle['left'] + face_rectangle['width']]
+            img_byte = Image.open(io.BytesIO(image_bytes))
+            face_iso_image =img_byte.crop((face_rectangle['left'], face_rectangle['top'], face_rectangle['left'] + face_rectangle['width'], 
+                face_rectangle['top'] + face_rectangle['height']))
+
             return face_iso_image
         else:
             return None
@@ -107,15 +132,28 @@ def processEntityImages(choice_blobs, db_account_name, db_account_key, ca_file_u
     subPersonaInsertQuery = session.prepare("INSERT INTO " + subPersonaTableName + " (sub_persona_name, persona_name) VALUES (?, ?)")
     subPersonaEdgeInsertQuery = session.prepare("INSERT INTO " + subPersonaEdgeTableName + " (sub_persona_name, assoc_face_id, label_v_predict_assoc_flag) VALUES (?,?,?)")
     rawInsertQuery = session.prepare("INSERT INTO " + rawImageTableName + " (image_id, refined_image_edge_id, file_uri, image_bytes) VALUES (?,?,?,?)")
-    refinedInsertQuery = session.prepare("INSERT INTO " + refinedImageTableName + " (image_id, raw_image_edge_id, image_bytes) VALUES (?,?,?)")
+    refinedInsertQuery = session.prepare("INSERT INTO " + refinedImageTableName + " (image_id, raw_image_edge_id, image_bytes, thumbnail_bytes, feature_bytes) VALUES (?,?,?,?,?)")
     
     for (blob, image_bytes, face_bytes) in blob_image_faces:
         if face_bytes is not None:
             file_name = blob.name
             (entity, usage, number) = file_name.split('-')
         
+            #Generate the face classifier features from the face using VGG-face on Keras
+            if face_bytes.mode != "RGB":
+                    face_bytes = face_bytes.convert("RGB")
+            face_bytes = face_bytes.resize((img_width, img_height))
+            image = img_to_array(face_bytes)
+            image = np.expand_dims(image, axis=0)
+            image = imagenet_utils.preprocess_input(image)
+            stuff = vgg_face_feature_gen.predict(image, batch_size=1).flatten()
+            writer = avro.io.DatumWriter(schema)
+            bytes_writer = io.BytesIO()
+            encoder = avro.io.BinaryEncoder(bytes_writer)
+            writer.write({"features": stuff.tolist()}, encoder)
+            face_feature_bytes = bytes_writer.getvalue()
             #For each image extract the label and use to generate a persona, redundant writes will cancel out
-            
+
             #Writes the entity label to the persona table 
             #For the time being also write the entity label to the subpersona table and associate with the persona table
             session.execute(personaInsertQuery, (entity,))
@@ -127,18 +165,35 @@ def processEntityImages(choice_blobs, db_account_name, db_account_key, ca_file_u
             image_hash = str(hashed_bytes_int) #Stupid workaround to Python high precision int incompatability
             #session.execute(rawInsertQuery, (image_hash, "", file_name, image_bytes))
             
+            width, height = face_bytes.size
+            if width > height:
+                transform_factor = 256/width
+            else:
+                transform_factor = 256/height
+            compact_face_bytes = face_bytes.resize((round(height*transform_factor), round(width*transform_factor))) 
+            
             #Write each face extracted from the image to the DB as a refined image
-            face_bytes = cv2.imencode(".jpg", face_bytes)[1]
-            face_hash_bytes = hashlib.md5(face_bytes).digest()
+            imgByteArr = io.BytesIO()
+            compact_face_bytes.save(imgByteArr, format='PNG')
+            compact_face_bytes = imgByteArr.getvalue()
+            face_hash_bytes = hashlib.md5(compact_face_bytes).digest()
             face_hashed_bytes_int = int.from_bytes(face_hash_bytes, byteorder='big') #Good identifier, sadly un
             face_hash = str(face_hashed_bytes_int) #Stupid workaround to Python high precision int incompatability
-            session.execute(refinedInsertQuery, (face_hash, image_hash, face_bytes))
+            session.execute(refinedInsertQuery, (face_hash, image_hash, compact_face_bytes, compact_face_bytes, face_feature_bytes))
             logging.debug("Writing face to DB {0}".format(face_hash))
             
             #If the data is part of the training set, write edges between the sub-personas, face images
             if usage == "Train":
                 session.execute(subPersonaEdgeInsertQuery, (entity, face_hash, True))
             #Otherwise do not write an edge, these will be predicted later by the training service
+
+def imgPreprocessing(image_file):
+    nparr = np.fromstring(image_file, np.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR) # cv2.IMREAD_COLOR in OpenCV 3.1
+    decoded = cv2.resize(image, (img_width, img_height))
+    decoded = decoded.reshape((1,img_width,img_height,3))
+    #logging.debug("Converted image from {0} to {1}".format(image.shape, decoded.shape))
+    return decoded
 
 def main ():
     logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)

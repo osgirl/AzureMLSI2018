@@ -64,8 +64,9 @@ def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_con
     
     print("\nCreating Keyspace")
     #Default keyspace settings from Azure CosmoDB
-    session.execute('CREATE KEYSPACE IF NOT EXISTS ' + db_keyspace + ' WITH replication = {\'class\': \'NetworkTopologyStrategy\', \'datacenter\' : 1 }'); #Formatting is stupid on this string due to the additional curley braces
-    
+    response = session.execute('CREATE KEYSPACE IF NOT EXISTS ' + db_keyspace + ' WITH replication = {\'class\': \'NetworkTopologyStrategy\', \'datacenter\' : 1 }'); #Formatting is stupid on this string due to the additional curley braces
+    logging.debug(response)
+
     session = cluster.connect(db_keyspace);   
 
     keyspace = db_config['db-keyspace']
@@ -97,8 +98,8 @@ def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_con
     session.execute('CREATE TABLE IF NOT EXISTS ' + sub_persona_edge_table_name + ' (sub_persona_name text, assoc_face_id text, label_v_predict_assoc_flag boolean, PRIMARY KEY(sub_persona_name, assoc_face_id))');
     
     #Refined table stores extracted face blobs and associative edges to the raw image from which it was derived
-    session.execute('CREATE TABLE IF NOT EXISTS ' + refined_image_table_name + ' (image_id text, raw_image_edge_id text, image_bytes blob, PRIMARY KEY(image_id))');
-    
+    session.execute('CREATE TABLE IF NOT EXISTS ' + refined_image_table_name + ' (image_id text, raw_image_edge_id text, image_bytes blob, thumbnail_bytes blob, feature_bytes blob, PRIMARY KEY(image_id))');
+ 
     #Raw table stores pre-extraction images that contain at least one face
     session.execute('CREATE TABLE IF NOT EXISTS ' + raw_image_table_name + ' (image_id text, refined_image_edge_id text, file_uri text, image_bytes blob, PRIMARY KEY(image_id))');
     
@@ -169,7 +170,7 @@ def main():
     ca_file_uri = os.environ["CA_FILE_URI"]
     source_dir = "./TestImages"
     
-    generateAzureInputStore(bs_config, bs_account_name, bs_account_key, source_dir)
+    #generateAzureInputStore(bs_config, bs_account_name, bs_account_key, source_dir)
     generateCosmoDBStructure(config, db_account_name, db_account_key, ca_file_uri, db_config)
 
     

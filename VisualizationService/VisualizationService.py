@@ -13,6 +13,8 @@ import hashlib
 import os
 import sys
 
+from PIL import Image
+
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 FORMAT = '%(asctime) %(message)s'
 logging.basicConfig(format=FORMAT) 
