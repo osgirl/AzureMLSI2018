@@ -1,7 +1,3 @@
-'''
-    This script runs once upon initial instantiation of the container to load the test data.
-    The container can be run without running this script. 
-'''
 from azure.storage.blob import BlockBlobService, PublicAccess
 from cassandra.cluster import Cluster
 from cassandra.auth import PlainTextAuthProvider
@@ -22,6 +18,22 @@ import cv2
 
 
 import cognitive_face as CF
+
+from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
+
+from keras.models import Sequential
+from keras.layers import Conv2D, MaxPooling2D
+from keras.layers import Activation, Dropout, Flatten, Dense
+
+from keras import backend as K
+from keras import applications
+from keras_vggface.vggface import VGGFace
+
+
+from sklearn import tree
+import warnings
+import pickle
+
 
 def getRawTestImagesFromBlobStore(bs_account_name, bs_account_key, bs_container):
     '''
