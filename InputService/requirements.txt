@@ -2,6 +2,7 @@ Flask>=1.0.0
 azure-cosmos>=1.0.0
 cassandra-driver>=1.0.0
 azure-storage-blob>=1.0
-dlib
 numpy
-opencv-python
+avro
+pillow
+pyyaml

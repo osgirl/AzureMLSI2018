@@ -38,7 +38,6 @@ from keras.applications import imagenet_utils
 
 import avro.schema
 import avro.io
-from matplotlib.transforms import blended_transform_factory
 
 import math
 
@@ -134,6 +133,30 @@ def processEntityImages(choice_blobs, db_account_name, db_account_key, ca_file_u
     rawInsertQuery = session.prepare("INSERT INTO " + rawImageTableName + " (image_id, refined_image_edge_id, file_uri, image_bytes) VALUES (?,?,?,?)")
     refinedInsertQuery = session.prepare("INSERT INTO " + refinedImageTableName + " (image_id, raw_image_edge_id, image_bytes, thumbnail_bytes, feature_bytes) VALUES (?,?,?,?,?)")
     
+    def truncateTables(table_name, field_name):
+        '''
+            Jury rigs a hole-table erase for a particular table by extracting all the unique values for a table field
+            and using them to eras the entire table
+        '''
+        term_set = set()
+        results = session.execute("SELECT %s FROM %s", (field_name, table_name))
+        for result in results:
+            term_set.add(result['field_name'])
+        
+        session.execute("DELETE * FROM %s WHERE %s IN %s", (table_name, field_name, list(term_set)))
+        
+        '''
+        session.execute("DELETE * FROM {0}".format(personaTableName))
+        session.execute("DELETE FROM {0}".format(subPersonaTableName))
+        session.execute("DELETE FROM {0}".format(subPersonaEdgeTableName))
+        session.execute("DELETE FROM {0}".format(rawImageTableName))
+        session.execute("DELETE FROM {0}".format(refinedImageTableName))
+        '''
+    truncateTables(personaTableName, "persona_name")
+    
+    face_write_count = 0
+    face_label_write_count = 0
+
     for (blob, image_bytes, face_bytes) in blob_image_faces:
         if face_bytes is not None:
             file_name = blob.name
@@ -181,11 +204,17 @@ def processEntityImages(choice_blobs, db_account_name, db_account_key, ca_file_u
             face_hash = str(face_hashed_bytes_int) #Stupid workaround to Python high precision int incompatability
             session.execute(refinedInsertQuery, (face_hash, image_hash, compact_face_bytes, compact_face_bytes, face_feature_bytes))
             logging.debug("Writing face to DB {0}".format(face_hash))
+            face_write_count += 1
             
             #If the data is part of the training set, write edges between the sub-personas, face images
             if usage == "Train":
                 session.execute(subPersonaEdgeInsertQuery, (entity, face_hash, True))
+                logging.debug("Writing face label to DB {0}".format())
+                face_label_write_count += 1
             #Otherwise do not write an edge, these will be predicted later by the training service
+
+    logging.debug("Wrote {0} faces to DB".format(face_write_count))
+    logging.debug("Wrote {0} face labels to DB".format(face_label_write_count))
 
 def imgPreprocessing(image_file):
     nparr = np.fromstring(image_file, np.uint8)
