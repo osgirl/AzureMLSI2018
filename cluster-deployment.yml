@@ -9,7 +9,7 @@ data:
   db-sub-persona-edge-table: sub_persona_edge_table
   db-raw-image-table: raw_image_table
   db-refined-image-table: refined_image_table
-  db-log-table: log_table
+  db-log-offset-table: log_offset_table
 ---
 apiVersion: v1
 kind: ConfigMap

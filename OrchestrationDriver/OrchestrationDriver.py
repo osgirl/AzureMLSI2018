@@ -11,30 +11,24 @@ https://github.com/Azure-Samples/container-instances-python-manage
 
 '''
 from utilities import AzureContext
-from azure.storage.blob import BlockBlobService, PublicAccess
+from azure.storage.blob import BlockBlobService
 
 from cassandra.cluster import Cluster
 from cassandra.auth import PlainTextAuthProvider
 from ssl import PROTOCOL_TLSv1_2, CERT_REQUIRED
 
-import cv2
 import numpy as np
 
 from pathlib import Path
-
 import hashlib
-
-import argparse
 
 import os
 import logging
 import sys
 
 import json
-
 import yaml
 
-from azure.cosmos.cosmos_client import CosmosClient
 
 def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_config):
     '''
@@ -60,13 +54,11 @@ def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_con
     cluster = Cluster([endpoint_uri], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
         
     #Checks to ensure that the demonstration keyspace exists and creates it if not 
+    print("\nCreating Keyspace {0}".format(db_keyspace))
     session = cluster.connect()
-    
-    print("\nCreating Keyspace")
-    #Default keyspace settings from Azure CosmoDB
     response = session.execute('CREATE KEYSPACE IF NOT EXISTS ' + db_keyspace + ' WITH replication = {\'class\': \'NetworkTopologyStrategy\', \'datacenter\' : 1 }'); #Formatting is stupid on this string due to the additional curley braces
-    logging.debug(response)
-
+    session.shutdown()
+    
     session = cluster.connect(db_keyspace);   
 
     keyspace = db_config['db-keyspace']
@@ -75,7 +67,7 @@ def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_con
     sub_persona_edge_table_name = db_config['db-sub-persona-edge-table']
     raw_image_table_name = db_config['db-raw-image-table']
     refined_image_table_name = db_config['db-refined-image-table']
-    log_table_name = db_config['db-log-table']
+    log_offset_table_name = db_config['db-log-offset-table']
 
     #Create table
     print("\nCreating Table")
@@ -84,7 +76,7 @@ def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_con
     session.execute('DROP TABLE IF EXISTS ' + sub_persona_edge_table_name)
     session.execute('DROP TABLE IF EXISTS ' + raw_image_table_name)
     session.execute('DROP TABLE IF EXISTS ' + refined_image_table_name)
-    session.execute('DROP TABLE IF EXISTS ' + log_table_name)
+    session.execute('DROP TABLE IF EXISTS ' + log_offset_table_name)
 
     #Persona table provides metadata on each persona in the demonstration database such as name and date of birth
     #This table is set up primarily to be scanned and used to pivot to the persona edge table to discover images 
@@ -98,13 +90,14 @@ def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_con
     session.execute('CREATE TABLE IF NOT EXISTS ' + sub_persona_edge_table_name + ' (sub_persona_name text, assoc_face_id text, label_v_predict_assoc_flag boolean, PRIMARY KEY(sub_persona_name, assoc_face_id))');
     
     #Refined table stores extracted face blobs and associative edges to the raw image from which it was derived
-    session.execute('CREATE TABLE IF NOT EXISTS ' + refined_image_table_name + ' (image_id text, raw_image_edge_id text, image_bytes blob, thumbnail_bytes blob, feature_bytes blob, PRIMARY KEY(image_id))');
+    session.execute('CREATE TABLE IF NOT EXISTS ' + refined_image_table_name + ' (image_id text, raw_image_edge_id text, image_bytes blob, feature_bytes blob, PRIMARY KEY(image_id))');
  
     #Raw table stores pre-extraction images that contain at least one face
-    session.execute('CREATE TABLE IF NOT EXISTS ' + raw_image_table_name + ' (image_id text, refined_image_edge_id text, file_uri text, image_bytes blob, PRIMARY KEY(image_id))');
+    session.execute('CREATE TABLE IF NOT EXISTS ' + raw_image_table_name + ' (image_id text, file_uri text, image_bytes blob, PRIMARY KEY(image_id))');
     
     #Log table which allows the services to track write operations where needed, indexed by timestamp to the hour resolution
-    session.execute('CREATE TABLE IF NOT EXISTS ' + log_table_name + ' (event_timestamp timestamp, event_type text, event_text text, PRIMARY KEY(event_timestamp, event_type))');
+    session.execute('CREATE TABLE IF NOT EXISTS ' + log_offset_table_name + ' (event_timestamp timestamp, current_offset bigint, PRIMARY KEY(event_timestamp))');
+    session.shutdown()
 
 def generateAzureInputStore(bs_config, stor_name, stor_key, source_dir):
     '''
