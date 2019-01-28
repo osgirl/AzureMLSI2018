@@ -6,9 +6,10 @@ data:
   db-keyspace: az_ml_si_keyspace
   db-persona-table: persona_table
   db-sub-persona-table: sub_persona_table
-  db-sub-persona-edge-table: sub_persona_edge_table
+  db-sub-persona-face-edge-table: sub_persona_face_edge_table
+  db-face-sub-persona-edge-table: face_sub_persona_edge_table
   db-raw-image-table: raw_image_table
-  db-refined-image-table: refined_image_table
+  db-face-image-table: face_image_table
   db-log-offset-table: log_offset_table
 ---
 apiVersion: v1

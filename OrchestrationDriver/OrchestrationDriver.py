@@ -64,18 +64,20 @@ def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_con
     keyspace = db_config['db-keyspace']
     persona_table_name = db_config['db-persona-table']
     sub_persona_table_name = db_config['db-sub-persona-table']
-    sub_persona_edge_table_name = db_config['db-sub-persona-edge-table']
+    sub_persona_face_edge_table_name = db_config['db-sub-persona-face-edge-table']
+    face_sub_persona_edge_table_name = db_config['db-face-sub-persona-edge-table']
     raw_image_table_name = db_config['db-raw-image-table']
-    refined_image_table_name = db_config['db-refined-image-table']
+    face_image_table_name = db_config['db-face-image-table']
     log_offset_table_name = db_config['db-log-offset-table']
 
     #Create table
     print("\nCreating Table")
     session.execute('DROP TABLE IF EXISTS ' + persona_table_name)
     session.execute('DROP TABLE IF EXISTS ' + sub_persona_table_name)
-    session.execute('DROP TABLE IF EXISTS ' + sub_persona_edge_table_name)
+    session.execute('DROP TABLE IF EXISTS ' + sub_persona_face_edge_table_name)
+    session.execute('DROP TABLE IF EXISTS ' + face_sub_persona_edge_table_name)
     session.execute('DROP TABLE IF EXISTS ' + raw_image_table_name)
-    session.execute('DROP TABLE IF EXISTS ' + refined_image_table_name)
+    session.execute('DROP TABLE IF EXISTS ' + face_image_table_name)
     session.execute('DROP TABLE IF EXISTS ' + log_offset_table_name)
 
     #Persona table provides metadata on each persona in the demonstration database such as name and date of birth
@@ -83,14 +85,14 @@ def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_con
     session.execute('CREATE TABLE IF NOT EXISTS ' + persona_table_name + ' (persona_name text, PRIMARY KEY(persona_name))');
     
     #
-    session.execute('CREATE TABLE IF NOT EXISTS ' + sub_persona_table_name + ' (sub_persona_name text, persona_name text, PRIMARY KEY(sub_persona_name))');
+    session.execute('CREATE TABLE IF NOT EXISTS ' + sub_persona_table_name + ' (sub_persona_name text, persona_name text, PRIMARY KEY(persona_name, sub_persona_name))');
     
-    #Persona edge table contains the associations to pivot from a selected persona to its associated images
-    #These associations can exist either due to explicit labeling or predicted labels
-    session.execute('CREATE TABLE IF NOT EXISTS ' + sub_persona_edge_table_name + ' (sub_persona_name text, assoc_face_id text, label_v_predict_assoc_flag boolean, PRIMARY KEY(sub_persona_name, assoc_face_id))');
+    #Two tables which prove edges to associate sub-personas and face-images using labels or predictions and allow them to be discovered from either direction
+    session.execute('CREATE TABLE IF NOT EXISTS ' + sub_persona_face_edge_table_name + ' (sub_persona_name text, assoc_face_id text, label_v_predict_assoc_flag boolean, PRIMARY KEY(sub_persona_name, assoc_face_id))');
+    session.execute('CREATE TABLE IF NOT EXISTS ' + face_sub_persona_edge_table_name + ' (sub_persona_name text, assoc_face_id text, label_v_predict_assoc_flag boolean, PRIMARY KEY(assoc_face_id, sub_persona_name))');
     
     #Refined table stores extracted face blobs and associative edges to the raw image from which it was derived
-    session.execute('CREATE TABLE IF NOT EXISTS ' + refined_image_table_name + ' (image_id text, raw_image_edge_id text, image_bytes blob, feature_bytes blob, PRIMARY KEY(image_id))');
+    session.execute('CREATE TABLE IF NOT EXISTS ' + face_image_table_name + ' (face_id text, raw_image_edge_id text, face_bytes blob, feature_bytes blob, PRIMARY KEY(face_id))');
  
     #Raw table stores pre-extraction images that contain at least one face
     session.execute('CREATE TABLE IF NOT EXISTS ' + raw_image_table_name + ' (image_id text, file_uri text, image_bytes blob, PRIMARY KEY(image_id))');

@@ -130,25 +130,28 @@ def processEntityImages(choice_blobs, db_account_name, db_account_key, ca_file_u
         keyspace = os.environ['DB_KEYSPACE']
         personaTableName = os.environ['DB_PERSONA_TABLE']
         subPersonaTableName = os.environ['DB_SUB_PERSONA_TABLE']
-        personaEdgeTableName = os.environ['DB_SUB_PERSONA_EDGE_TABLE']
+        subPersonaFaceEdgeTableName = os.environ['DB_SUB_PERSONA_EDGE_TABLE']
+        faceSubPersonaEdgeTableName = os.environ['DB_SUB_PERSONA_EDGE_TABLE']
         rawImageTableName = os.environ['DB_RAW_IMAGE_TABLE']
-        refinedImageTableName = os.environ['DB_REFINED_IMAGE_TABLE']
+        faceTableName = os.environ['DB_REFINED_IMAGE_TABLE']
     #Otherwise load db config
     else:
         keyspace = db_config['db-keyspace']
         personaTableName = db_config['db-persona-table']
         subPersonaTableName = db_config['db-sub-persona-table']
-        subPersonaEdgeTableName = db_config['db-sub-persona-edge-table']
+        subPersonaFaceEdgeTableName = db_config['db-sub-persona-face-edge-table']
+        faceSubPersonaEdgeTableName = db_config['db-face-sub-persona-edge-table']
         rawImageTableName = db_config['db-raw-image-table']
-        refinedImageTableName = db_config['db-refined-image-table']
+        faceTableName = db_config['db-face-image-table']
 
     #Prepare Cosmos DB session and insertion queries
     session = cluster.connect(keyspace);   
     personaInsertQuery = session.prepare("INSERT INTO " + personaTableName + " (persona_name) VALUES (?)")
     subPersonaInsertQuery = session.prepare("INSERT INTO " + subPersonaTableName + " (sub_persona_name, persona_name) VALUES (?, ?)")
-    subPersonaEdgeInsertQuery = session.prepare("INSERT INTO " + subPersonaEdgeTableName + " (sub_persona_name, assoc_face_id, label_v_predict_assoc_flag) VALUES (?,?,?)")
+    subPersonaFaceEdgeInsertQuery = session.prepare("INSERT INTO " + subPersonaFaceEdgeTableName + " (sub_persona_name, assoc_face_id, label_v_predict_assoc_flag) VALUES (?,?,?)")
+    faceSubPersonaEdgeInsertQuery = session.prepare("INSERT INTO " + faceSubPersonaEdgeTableName + " (sub_persona_name, assoc_face_id, label_v_predict_assoc_flag) VALUES (?,?,?)")
     rawInsertQuery = session.prepare("INSERT INTO " + rawImageTableName + " (image_id, file_uri, image_bytes) VALUES (?,?,?)")
-    refinedInsertQuery = session.prepare("INSERT INTO " + refinedImageTableName + " (image_id, raw_image_edge_id, image_bytes, feature_bytes) VALUES (?,?,?,?)")
+    refinedInsertQuery = session.prepare("INSERT INTO " + faceTableName + " (face_id, raw_image_edge_id, face_bytes, feature_bytes) VALUES (?,?,?,?)")
     
     client = EventHubClient(eh_url, debug=False, username=eh_account, password=eh_key)
     sender = client.add_sender(partition="0")
@@ -157,6 +160,7 @@ def processEntityImages(choice_blobs, db_account_name, db_account_key, ca_file_u
     
     face_write_count = 0
     face_label_write_count = 0
+    face_unlabeled_write_count = 0
 
     for (blob, image_bytes, face_bytes) in blob_image_faces:
         if face_bytes is not None:
@@ -182,7 +186,7 @@ def processEntityImages(choice_blobs, db_account_name, db_account_key, ca_file_u
             #For the time being also write the entity label to the subpersona table and associate with the persona table
             session.execute(personaInsertQuery, (entity,))
             session.execute(subPersonaInsertQuery, (entity, entity))
-            logging.info("Writing persona, sub-persona to DB {0}".format(entity))
+            logging.info("Writing persona, sub-persona {0} to DB table {1}".format(entity, subPersonaTableName))
             
             #Resizes the image to ensure the write query does not exceed maximum size
             width, height = image_bytes.size
@@ -223,12 +227,20 @@ def processEntityImages(choice_blobs, db_account_name, db_account_key, ca_file_u
             
             #If the data is part of the training set, write edges between the sub-personas, face images
             if usage == "Train":
-                session.execute(subPersonaEdgeInsertQuery, (entity, face_hash, True))
+                session.execute(subPersonaFaceEdgeInsertQuery, (entity, face_hash, True))
+                session.execute(faceSubPersonaEdgeInsertQuery, (entity, face_hash, True))
                 sender.send(EventData(json.dumps({"EVENT_TYPE": "LABEL_WRITE", "LABEL_INDEX":face_hash, "WRITE_TIMESTAMP": datetime.datetime.now().timestamp()})))
                 logging.info("Writing face label to DB {0}".format(face_hash))
                 face_label_write_count += 1
+            else:
+                #Silly engineering workaround to make it easier to find the unlabeled images later for re-prediction
+                session.execute(subPersonaFaceEdgeInsertQuery, ("TEMPORARY", face_hash, False))
+                session.execute(faceSubPersonaEdgeInsertQuery, ("TEMPORARY", face_hash, False))
+                logging.info("Writing unlabeled face {0} to DB".format(face_hash))
+                face_unlabeled_write_count += 1
             #Otherwise do not write an edge, these will be predicted later by the training service
 
+    #session.close()
     client.stop()
     logging.info("Wrote {0} faces to DB".format(face_write_count))
     logging.info("Wrote {0} face labels to DB".format(face_label_write_count))
