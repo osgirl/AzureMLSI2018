@@ -165,7 +165,7 @@ def main():
     ca_file_uri = os.environ["CA_FILE_URI"]
     source_dir = "./TestImages"
     
-    #generateAzureInputStore(bs_config, bs_account_name, bs_account_key, source_dir)
+    generateAzureInputStore(bs_config, bs_account_name, bs_account_key, source_dir)
     generateCosmoDBStructure(config, db_account_name, db_account_key, ca_file_uri, db_config)
 
     

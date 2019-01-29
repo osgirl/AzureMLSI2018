@@ -234,16 +234,15 @@ def processEntityImages(choice_blobs, db_account_name, db_account_key, ca_file_u
                 face_label_write_count += 1
             else:
                 #Silly engineering workaround to make it easier to find the unlabeled images later for re-prediction
-                session.execute(subPersonaFaceEdgeInsertQuery, ("TEMPORARY", face_hash, False))
-                session.execute(faceSubPersonaEdgeInsertQuery, ("TEMPORARY", face_hash, False))
-                logging.info("Writing unlabeled face {0} to DB".format(face_hash))
+                logging.info("Ignoring unlabeled face {0} to DB".format(face_hash))
                 face_unlabeled_write_count += 1
             #Otherwise do not write an edge, these will be predicted later by the training service
 
     #session.close()
     client.stop()
     logging.info("Wrote {0} faces to DB".format(face_write_count))
-    logging.info("Wrote {0} face labels to DB".format(face_label_write_count))
+    logging.info("Wrote {0} face labels to edge DB".format(face_label_write_count))
+    logging.info("Ignored {0} unlabeled faces to edge DB".format(face_unlabeled_write_count))
 
 def imgPreprocessing(image_file):
     nparr = np.fromstring(image_file, np.uint8)

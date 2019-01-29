@@ -15,7 +15,7 @@ import sys
 
 from PIL import Image
 
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 FORMAT = '%(asctime) %(message)s'
 logging.basicConfig(format=FORMAT) 
 
@@ -29,9 +29,10 @@ if os.path.exists('/tmp/secrets/db/db-account'):
 
     cosmos_keyspace = os.environ['DB_KEYSPACE']
     persona_table = os.environ['DB_PERSONA_TABLE']
+    sub_persona_table = os.environ['DB_SUB_PERSONA_TABLE']
     sub_persona_edge_table = os.environ['DB_PERSONA_EDGE_TABLE']
     raw_image_table = os.environ['DB_RAW_IMAGE_TABLE']
-    refined_image_table = os.environ['DB_REFINED_IMAGE_TABLE']
+    face_image_table = os.environ['DB_FACE_IMAGE_TABLE']
 #Otherwise run locally and retrieve from project cluster definition file
 else: 
     db_account_name = os.environ['COSMOS_DB_ACCOUNT']
@@ -45,10 +46,11 @@ else:
             
     cosmos_keyspace = db_config['db-keyspace']
     persona_table = db_config['db-persona-table']
-    sub_persona_table = db_config['db-persona-table']
-    sub_persona_edge_table = db_config['db-sub-persona-edge-table']
+    sub_persona_table = db_config['db-sub-persona-table']
+    sub_persona_face_edge_table = db_config['db-sub-persona-face-edge-table']
+    face_sub_persona_edge_table = db_config['db-face-sub-persona-edge-table']
     raw_image_table = db_config['db-raw-image-table']
-    refined_image_table = db_config['db-refined-image-table']
+    face_image_table = db_config['db-face-image-table']
     
 #Build connection string
 azure_db_domain = ".cassandra.cosmosdb.azure.com"
@@ -93,15 +95,20 @@ def serveMainPage():
     '''
     
     #Grab list of current entities
+    sub_persona_query = session.prepare("SELECT sub_persona_name FROM " + sub_persona_table + " WHERE persona_name=?")
+
     persona_list = list(session.execute("SELECT persona_name FROM " + persona_table))
-    logging.debug(persona_list)
+    sub_persona_list = []
+    for persona in persona_list:
+        sub_persona_list += list(session.execute(sub_persona_query, (persona.persona_name,)))
+    logging.info("Loading {0} sub-personas from DB table {1}".format(len(sub_persona_list), persona_table))
     
     thumbnail_path_list = []
     number_of_predicted_list = []
     number_of_labeled_list = []
     for persona in persona_list:
         #Pivot through entity-image table to recover entity image byte blobs
-        image_id_list = session.execute("SELECT sub_persona_name, assoc_face_id, label_v_predict_assoc_flag FROM {0} WHERE sub_persona_name='{1}'".format(sub_persona_edge_table, persona.persona_name))
+        image_id_list = session.execute("SELECT sub_persona_name, assoc_face_id, label_v_predict_assoc_flag FROM {0} WHERE sub_persona_name='{1}'".format(sub_persona_face_edge_table, persona.persona_name))
         labeled_faces = list(filter(lambda x: x.label_v_predict_assoc_flag == True, image_id_list))
         predicted_faces = list(filter(lambda x: x.label_v_predict_assoc_flag == False, image_id_list))
         number_of_labeled_images = len(labeled_faces)
@@ -109,8 +116,8 @@ def serveMainPage():
         logging.debug(number_of_labeled_images)
         logging.debug(labeled_faces[0].assoc_face_id)
 
-        image_bytes = session.execute("SELECT image_id, image_bytes FROM {0} WHERE image_id='{1}'".format(refined_image_table, labeled_faces[0].assoc_face_id))
-        image_bytes = list(map(lambda x: x.image_bytes, image_bytes))
+        image_bytes = session.execute("SELECT face_id, face_bytes FROM {0} WHERE face_id='{1}'".format(face_image_table, labeled_faces[0].assoc_face_id))
+        image_bytes = list(map(lambda x: x.face_bytes, image_bytes))
         
         image_url = imageHashAndCache(image_bytes[0])
             
@@ -131,20 +138,20 @@ def serveEntityPage(persona_name):
         Get for the entity page which shows the entity, sub-entities and labeled/predicted images associated with
         each sub-entity; label images associated with that entity
     '''
-    image_id_list = session.execute("SELECT sub_persona_name, assoc_face_id, label_v_predict_assoc_flag FROM {0} WHERE sub_persona_name='{1}'".format(sub_persona_edge_table, persona_name))
+    image_id_list = session.execute("SELECT sub_persona_name, assoc_face_id, label_v_predict_assoc_flag FROM {0} WHERE sub_persona_name='{1}'".format(sub_persona_face_edge_table, persona_name))
     labeled_faces = list(filter(lambda x: x.label_v_predict_assoc_flag == True, image_id_list))
     predicted_faces = list(filter(lambda x: x.label_v_predict_assoc_flag == False, image_id_list))
     number_of_labeled_images = len(labeled_faces)
     number_of_predicted_images = len(predicted_faces)
-    logging.debug(number_of_labeled_images)
+    logging.info(number_of_labeled_images)
 
     def retrieveAndCacheFaces(face_id_row):
         logging.debug("Retrieving face {0} from DB".format(face_id_row.assoc_face_id))
-        image_byte = session.execute("SELECT image_id, image_bytes FROM {0} WHERE image_id='{1}'".format(refined_image_table, face_id_row.assoc_face_id))
-        image_byte = list(map(lambda x: x.image_bytes, image_byte))
+        image_byte = session.execute("SELECT face_id, face_bytes FROM {0} WHERE face_id='{1}'".format(face_image_table, face_id_row.assoc_face_id))
+        image_byte = list(map(lambda x: x.face_bytes, image_byte))
         if len(image_byte) > 0:
             image_url = imageHashAndCache(image_byte[0])
-            return image_url
+            return {"face_id": face_id_row.assoc_face_id, "face_url": image_url}
         else:
             return None
     
@@ -152,13 +159,24 @@ def serveEntityPage(persona_name):
     labeled_image_urls = map(retrieveAndCacheFaces, labeled_faces)
     return render_template('entity.html', labeled_image_urls=labeled_image_urls, predicted_image_urls=predicted_image_urls)
 
-@app.route('/image')
-def serveImagePage():
+@app.route('/images/<string:image_id>')
+def serveImagePage(image_id):
     '''
         Get for an individual image showing its original image, extracted face, associated entity/sub-entity and 
         explanatory image
     '''
-    return None
+    
+    results = session.execute("SELECT sub_persona_name, assoc_face_id,  label_v_predict_assoc_flag FROM " + face_sub_persona_edge_table + " WHERE assoc_face_id='{0}'".format(image_id))
+    
+        
+    if len(list(filter(lambda x: x.label_v_predict_assoc_flag == True, results))) == 1:
+        logging.info("Labeled Edge Found")
+        
+    else:
+        logging.info("No Labeled Edge")
+    
+    
+    return render_template("image.html")
 
 @app.route('/addImage')
 def serveAppendImagePage():

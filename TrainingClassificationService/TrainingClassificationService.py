@@ -92,7 +92,7 @@ def retrainClassifier(session, db_config):
     '''
     Gathers available labeled faces from the database for personas, sub-personas to train a new keras classifier
     '''
-    (keyspace, personaTableName, subPersonaTableName, subPersonaEdgeTableName, rawImageTableName, refinedImageTableName) = getTables(db_config)
+    (keyspace, personaTableName, subPersonaTableName, subPersonaFaceEdgeTableName, faceSubPersonaEdgeTableName, rawImageTableName, faceImageTableName) = getTables(db_config)
 
     #Prepare Cosmos DB session and insertion queries
     persona_list = list(session.execute("SELECT persona_name FROM " + personaTableName))
@@ -101,10 +101,10 @@ def retrainClassifier(session, db_config):
     labels_list = []
     for persona in persona_list:
         logging.info("Retrieving features for {0}".format(persona.persona_name))
-        image_id_list = session.execute("SELECT sub_persona_name, assoc_face_id, label_v_predict_assoc_flag FROM {0} WHERE sub_persona_name='{1}'".format(subPersonaEdgeTableName, persona.persona_name))
+        image_id_list = session.execute("SELECT sub_persona_name, assoc_face_id, label_v_predict_assoc_flag FROM {0} WHERE sub_persona_name='{1}'".format(subPersonaFaceEdgeTableName, persona.persona_name))
 
         for image_id in image_id_list:
-            image_features = session.execute("SELECT image_id, image_bytes, feature_bytes FROM {0} WHERE image_id='{1}'".format(refinedImageTableName, image_id.assoc_face_id))
+            image_features = session.execute("SELECT face_id, face_bytes, feature_bytes FROM {0} WHERE face_id='{1}'".format(faceImageTableName, image_id.assoc_face_id))
             for image_byte in image_features:
                 schema = avro.schema.Parse(open("./VGGFaceFeatures.avsc", "rb").read())
                 bytes_reader = io.BytesIO(image_byte.feature_bytes)
@@ -116,8 +116,6 @@ def retrainClassifier(session, db_config):
                 features_list.append(features['features'])
                 labels_list.append(persona.persona_name)
     
-        print(features_list)
-        
         #Convert the features and labels into keras compatible structures, train dense NN classifier
         unique_features_list = list(unique_features_set)
         homogenized_label_list = list(map(lambda x: unique_features_list.index(x), labels_list))
@@ -145,30 +143,37 @@ def getTables(db_config=None):
         subPersonaTableName = os.environ['DB_SUB_PERSONA_TABLE']
         subpersonaEdgeTableName = os.environ['DB_SUB_PERSONA_EDGE_TABLE']
         rawImageTableName = os.environ['DB_RAW_IMAGE_TABLE']
-        refinedImageTableName = os.environ['DB_REFINED_IMAGE_TABLE']
+        faceImageTableName = os.environ['DB_REFINED_IMAGE_TABLE']
     #Otherwise load db config
     else:
         keyspace = db_config['db-keyspace']
         personaTableName = db_config['db-persona-table']
         subPersonaTableName = db_config['db-sub-persona-table']
-        subPersonaEdgeTableName = db_config['db-sub-persona-edge-table']
+        subPersonaFaceEdgeTableName = db_config['db-sub-persona-face-edge-table']
+        faceSubPersonaEdgeTableName = db_config['db-face-sub-persona-edge-table']
         rawImageTableName = db_config['db-raw-image-table']
-        refinedImageTableName = db_config['db-refined-image-table']
-    return (keyspace, personaTableName, subPersonaTableName, subPersonaEdgeTableName, rawImageTableName, refinedImageTableName)
+        faceImageTableName = db_config['db-face-image-table']
+    return (keyspace, personaTableName, subPersonaTableName, subPersonaFaceEdgeTableName, faceSubPersonaEdgeTableName, rawImageTableName, faceImageTableName)
 
 def repredictImages(session, model, db_config):
     #If no db config file is passed, look for the container environment variables
-    (keyspace, personaTableName, subPersonaTableName, subPersonaEdgeTableName, rawImageTableName, refinedImageTableName) = getTables(db_config)
+    (keyspace, personaTableName, subPersonaTableName, subPersonaFaceEdgeTableName, faceSubPersonaEdgeTableName, rawImageTableName, faceImageTableName) = getTables(db_config)
     
     #Collect a list of the labeled facial images
-    labeled_image_ids = session.execute("SELECT sub_persona_name, assoc_face_id, label_v_predict_assoc_flag FROM {0}".format(subPersonaEdgeTableName))
-    labeled_image_ids = filter(lambda x: x.label_v_predict_assoc_flag == True, labeled_image_ids)
-    labeled_image_ids = list(map(lambda x: x.assoc_face_id, labeled_image_ids))
-    logging.info("Retrieved {0} labeled image ids".format(len(labeled_image_ids)))
+    labeled_face_ids = session.execute("SELECT sub_persona_name, assoc_face_id, label_v_predict_assoc_flag FROM {0}".format(subPersonaFaceEdgeTableName))
+    labeled_face_ids = filter(lambda x: x.label_v_predict_assoc_flag == True, labeled_face_ids)
+    labeled_face_ids = list(map(lambda x: x.assoc_face_id, labeled_face_ids))
+    logging.info("Retrieved {0} labeled image ids".format(len(labeled_face_ids)))
     
     #Collect facial images which are not labeled to be re-predicted
-    unlabeled_images = session.execute("SELECT image_id, feature_bytes FROM {0}".format(refinedImageTableName))
-    unlabeled_images = list(filter(lambda x: x.image_id not in labeled_image_ids, unlabeled_images))
+    #list(session.execute("SELECT assoc_face_id FROM {0} WHERE sub_persona_name={1}".format(faceSubPersonaEdgeTableName, "TEMPORARY")))
+    unlabeled_face_ids = list(session.execute("SELECT face_id FROM {0}".format(faceImageTableName)))
+    logging.info("Retrieved {0} unlabeled face ids".format(len(unlabeled_face_ids)))
+    unlabeled_face_ids = list(filter(lambda x: x.face_id not in labeled_face_ids, unlabeled_face_ids))
+    logging.info("Retrieved {0} unlabeled face ids".format(len(unlabeled_face_ids)))
+    
+    '''
+    unlabeled_images = list(filter(lambda x: x.image_id not in labeled_face_ids, unlabeled_images))
     logging.info("Retrieved {0} unlabeled images".format(len(unlabeled_images)))
     
     #Label unlabeled images
@@ -184,7 +189,7 @@ def repredictImages(session, model, db_config):
         logging.info(prediction)
         return prediction
     prediction_labels = map(predictImage, unlabeled_images)
-    
+    '''
     return True
         
 def main():
