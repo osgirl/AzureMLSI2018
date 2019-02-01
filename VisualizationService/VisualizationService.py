@@ -30,7 +30,8 @@ if os.path.exists('/tmp/secrets/db/db-account'):
     cosmos_keyspace = os.environ['DB_KEYSPACE']
     persona_table = os.environ['DB_PERSONA_TABLE']
     sub_persona_table = os.environ['DB_SUB_PERSONA_TABLE']
-    sub_persona_edge_table = os.environ['DB_PERSONA_EDGE_TABLE']
+    sub_persona_face_edge_table = os.environ['DB_SUB_PERSONA_FACE_EDGE_TABLE']
+    face_sub_persona_edge_table = os.environ['DB_FACE_SUB_PERSONA_EDGE_TABLE']
     raw_image_table = os.environ['DB_RAW_IMAGE_TABLE']
     face_image_table = os.environ['DB_FACE_IMAGE_TABLE']
 #Otherwise run locally and retrieve from project cluster definition file

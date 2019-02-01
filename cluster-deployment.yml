@@ -54,21 +54,31 @@ spec:
             configMapKeyRef:
               name: azmlsi-db-config
               key: db-persona-table
-        - name: DB_PERSONA_EDGE_TABLE
+        - name: DB_SUB_PERSONA_FACE_EDGE_TABLE
           valueFrom:
             configMapKeyRef:
               name: azmlsi-db-config
-              key: db-persona-edge-table
+              key: db-sub-persona-face-edge-table
+        - name: DB_FACE_SUB_PERSONA_EDGE_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-face-sub-persona-edge-table
+        - name: DB_FACE_IMAGE_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-face-image-table
         - name: DB_RAW_IMAGE_TABLE
           valueFrom:
             configMapKeyRef:
               name: azmlsi-db-config
               key: db-raw-image-table
-        - name: DB_REFINED_IMAGE_TABLE
+        - name: DB_FACE_IMAGE_TABLE
           valueFrom:
             configMapKeyRef:
               name: azmlsi-db-config
-              key: db-refined-image-table
+              key: db-face-image-table
         ports:
         - containerPort: 10350
           name: azure-cosmo-db
@@ -141,21 +151,31 @@ spec:
             configMapKeyRef:
               name: azmlsi-db-config
               key: db-persona-table
-        - name: DB_PERSONA_EDGE_TABLE
+        - name: DB_SUB_PERSONA_TABLE
           valueFrom:
             configMapKeyRef:
               name: azmlsi-db-config
-              key: db-persona-edge-table
+              key: db-sub-persona-table
+        - name: DB_SUB_PERSONA_FACE_EDGE_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-sub-persona-face-edge-table
+        - name: DB_FACE_SUB_PERSONA_EDGE_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-face-sub-persona-edge-table
         - name: DB_RAW_IMAGE_TABLE
           valueFrom:
             configMapKeyRef:
               name: azmlsi-db-config
               key: db-raw-image-table
-        - name: DB_REFINED_IMAGE_TABLE
+        - name: DB_FACE_IMAGE_TABLE
           valueFrom:
             configMapKeyRef:
               name: azmlsi-db-config
-              key: db-refined-image-table
+              key: db-face-image-table
         ports:
         - containerPort: 5000
         - containerPort: 10350
