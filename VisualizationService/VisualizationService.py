@@ -66,7 +66,7 @@ ssl_opts = {
 auth_provider = PlainTextAuthProvider(username=db_account_name, password=db_account_key)
 cluster = Cluster([azure_db_endpoint_uri], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
     
-logging.debug("Attempting to connect to CosmosDB with the following credentials {0}, {1}".format(azure_db_endpoint_uri, db_account_name, cosmos_keyspace)) 
+logging.info("Attempting to connect to CosmosDB with the following credentials {0}, {1}".format(azure_db_endpoint_uri, db_account_name, cosmos_keyspace)) 
 session = cluster.connect(cosmos_keyspace)
 
 def imageHashAndCache(image_bytes):
@@ -125,8 +125,6 @@ def serveMainPage():
         number_of_labeled_list.append(number_of_labeled_images)
         number_of_predicted_list.append(number_of_predicted_images)
     
-    logging.debug("mainpage")
-    
     name_list = map(lambda x: x.persona_name, persona_list)
     persona_profiles_list = zip(name_list, thumbnail_path_list, number_of_labeled_list, number_of_predicted_list)
     
@@ -138,15 +136,13 @@ def serveEntityPage(persona_name):
         Get for the entity page which shows the entity, sub-entities and labeled/predicted images associated with
         each sub-entity; label images associated with that entity
     '''
-    image_id_list = session.execute("SELECT sub_persona_name, assoc_face_id, label_v_predict_assoc_flag FROM {0} WHERE sub_persona_name='{1}'".format(sub_persona_face_edge_table, persona_name))
+    image_id_list = list(session.execute("SELECT sub_persona_name, assoc_face_id, label_v_predict_assoc_flag FROM {0} WHERE sub_persona_name='{1}'".format(sub_persona_face_edge_table, persona_name)))
     labeled_faces = list(filter(lambda x: x.label_v_predict_assoc_flag == True, image_id_list))
     predicted_faces = list(filter(lambda x: x.label_v_predict_assoc_flag == False, image_id_list))
-    number_of_labeled_images = len(labeled_faces)
-    number_of_predicted_images = len(predicted_faces)
-    logging.info(number_of_labeled_images)
+    logging.info("Retrieved {0} labeled images, {1} predicted images, {2} total for persona {3}".format(len(labeled_faces), len(predicted_faces), len(image_id_list), persona_name))
 
     def retrieveAndCacheFaces(face_id_row):
-        logging.debug("Retrieving face {0} from DB".format(face_id_row.assoc_face_id))
+        logging.info("Retrieving bytes for face id {0} from DB".format(face_id_row.assoc_face_id))
         image_byte = session.execute("SELECT face_id, face_bytes FROM {0} WHERE face_id='{1}'".format(face_image_table, face_id_row.assoc_face_id))
         image_byte = list(map(lambda x: x.face_bytes, image_byte))
         if len(image_byte) > 0:

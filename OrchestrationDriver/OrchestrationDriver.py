@@ -28,16 +28,10 @@ import sys
 
 import json
 import yaml
+import datetime
+import time
 
-
-def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_config):
-    '''
-    Prepares the CosmoDB Cassandra instance for the demonstration by imposing the required keyspace and table structure
-    '''
-    
-    db_config = db_config['data']
-    db_keyspace = db_config['db-keyspace']
-    
+def cosmosDBSetup(db_name, db_key, ca_file_uri):
     endpoint_uri = db_name + '.cassandra.cosmosdb.azure.com'
     #endpoint_uri = db_name + '.cassandra.cosmosdb.azure.us'
 
@@ -52,6 +46,62 @@ def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_con
     }
     auth_provider = PlainTextAuthProvider(username=db_name, password=db_key)
     cluster = Cluster([endpoint_uri], port = 10350, auth_provider=auth_provider, ssl_options=ssl_opts)
+    return cluster
+    
+
+def getTables(db_config=None):
+    '''
+    
+    '''
+    keyspace = db_config['db-keyspace']
+    personaTableName = db_config['db-persona-table']
+    subPersonaTableName = db_config['db-sub-persona-table']
+    subPersonaFaceEdgeTableName = db_config['db-sub-persona-face-edge-table']
+    faceSubPersonaEdgeTableName = db_config['db-face-sub-persona-edge-table']
+    rawImageTableName = db_config['db-raw-image-table']
+    faceImageTableName = db_config['db-face-image-table']
+
+    return (keyspace, personaTableName, subPersonaTableName, subPersonaFaceEdgeTableName, faceSubPersonaEdgeTableName, rawImageTableName, faceImageTableName)
+
+def wipeTables(db_name, db_key, db_config, ca_file_uri):
+    cluster = cosmosDBSetup(db_name, db_key, ca_file_uri)
+    db_config = db_config['data']
+    (keyspace, personaTableName, subPersonaTableName, subPersonaFaceEdgeTableName, faceSubPersonaEdgeTableName, rawImageTableName, faceImageTableName) = getTables(db_config)
+    
+    session = cluster.connect(keyspace);   
+
+    face_ids = list(session.execute("SELECT face_id FROM {0}".format(faceImageTableName)))
+    face_ids = tuple(map(lambda x: x.face_id, face_ids))
+    logging.info("{0} Face ids retrieved from face table".format(len(face_ids)))
+    
+    edge_id_tuple = list(session.execute("SELECT sub_persona_name, assoc_face_id FROM {0}".format(subPersonaFaceEdgeTableName)))
+    edge_id_tuples = list(map(lambda x: (x.sub_persona_name, x.assoc_face_id), edge_id_tuple))
+    logging.info("{0} edge ids retrieved from edge table".format(len(edge_id_tuples)))
+    
+    face_delete_counter = 0
+    for face_id in face_ids:
+        session.execute("DELETE FROM "  + faceImageTableName + " WHERE face_id = %s", (face_id,))
+        face_delete_counter += 1
+        time.sleep(0.5)
+    logging.info("{0} faces deleted".format(face_delete_counter))
+        
+    edge_delete_counter = 0
+    for sub_persona_name, assoc_face_id in edge_id_tuples:
+        session.execute("DELETE FROM " + subPersonaFaceEdgeTableName + " WHERE sub_persona_name= %s AND assoc_face_id= %s", (sub_persona_name, assoc_face_id))
+        session.execute("DELETE FROM " + faceSubPersonaEdgeTableName + " WHERE sub_persona_name= %s AND assoc_face_id= %s", (sub_persona_name, assoc_face_id))
+        edge_delete_counter += 1
+        time.sleep(0.5)
+    logging.info("{0} edges deleted".format(edge_delete_counter))
+    #for edge_id
+    
+def generateCosmoDBStructure(merged_config, db_name, db_key, ca_file_uri, db_config):
+    '''
+    Prepares the CosmoDB Cassandra instance for the demonstration by imposing the required keyspace and table structure
+    '''
+    
+    db_config = db_config['data']
+    db_keyspace = db_config['db-keyspace']
+    
         
     #Checks to ensure that the demonstration keyspace exists and creates it if not 
     print("\nCreating Keyspace {0}".format(db_keyspace))
@@ -130,16 +180,17 @@ def generateAzureInputStore(bs_config, stor_name, stor_key, source_dir):
             
             #Uploads to the Azure Blob Store
             block_blob_service.create_blob_from_path(bs_dir_name, blob_name, dir_path + "/" + file_name)
-            logging.debug("File written to blob container {0} from {1} {2}".format(bs_dir_name, os.path.join(dir_path, file_name), blob_name))
+            logging.info("File written to blob container {0} from {1} {2}".format(bs_dir_name, os.path.join(dir_path, file_name), blob_name))
             
             #Renames the image in place
             os.rename(os.path.join(dir_path, file_name), os.path.join(dir_path, blob_name))
-            logging.debug("Renamed {0} to {1}".format(os.path.join(dir_path, file_name), os.path.join(dir_path, blob_name)))
+            logging.info("Renamed {0} to {1}".format(os.path.join(dir_path, file_name), os.path.join(dir_path, blob_name)))
+            image_count += 1
+    logging.info("Wrote {0} images total to blob storage".format(image_count))
 
 def main():
-    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
-    FORMAT = '%(asctime) %(message)s'
-    logging.basicConfig(format=FORMAT)
+    FORMAT = '%(asctime) %(message)'
+    logging.basicConfig(filename="./OrchestrationDriver.log", level=logging.INFO)
     
     #Check if the blob storage access credentials have been loaded as a secret volume, then look at the environment variables for
     #testing
@@ -165,8 +216,9 @@ def main():
     ca_file_uri = os.environ["CA_FILE_URI"]
     source_dir = "./TestImages"
     
-    generateAzureInputStore(bs_config, bs_account_name, bs_account_key, source_dir)
-    generateCosmoDBStructure(config, db_account_name, db_account_key, ca_file_uri, db_config)
+    #generateAzureInputStore(bs_config, bs_account_name, bs_account_key, source_dir)
+    wipeTables(db_account_name, db_account_key, db_config, ca_file_uri)
+    #generateCosmoDBStructure(config, db_account_name, db_account_key, ca_file_uri, db_config)
 
     
 

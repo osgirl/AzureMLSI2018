@@ -14,7 +14,7 @@
       </div>
     </section>
     
-	{% for image_url in labeled_image_urls %}
+	{% for image_row in labeled_image_urls %}
 	<section>
 	  <div class="container">
 		<div class="row align-items-center">
@@ -26,7 +26,9 @@
 		  <div class="col order-lg-1">
 			<div class="p-5">
 				<p>Awesome entity</p>
-				<img src="{{image_url}}" height="150" width="150" />
+				<a href={{ url_for('serveImagePage', image_id=image_row['face_id'])}}>
+		  			<img src="{{image_row['face_url']}}" height="150" width="150"/>
+	  			</a>
 			</div>
 		  </div>
 		</div>
@@ -34,7 +36,7 @@
 	</section>
 	{% endfor %}    
 	
-	{% for image_url in predicted_image_urls %}
+	{% for image_row in predicted_image_urls %}
 	<section>
 	  <div class="container">
 		<div class="row align-items-center">
@@ -46,7 +48,9 @@
 		  <div class="col order-lg-1">
 			<div class="p-5">
 				<p>Awesome entity</p>
-				<img src="{{image_url}}" height="150" width="150" />
+				<a href={{ url_for('serveImagePage', image_id=image_row['face_id'])}}>
+		  			<img src="{{image_row['face_url']}}" height="150" width="150"/>
+	  			</a>
 			</div>
 		  </div>
 		</div>

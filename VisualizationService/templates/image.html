@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+  {% block content %}
+  <!-- Add your site or application content here -->
+   <section>
+      <div class="container">
+        <div class="row align-items-center">
+          <div class="col order-lg-1">
+            <div class="p-5">
+              <h2 class="display-4">Entity Index Home</h2>
+              <p>Individual Facial Image: Associated Raw Images and Entities</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+	{% for image_url in labeled_image_urls %}
+	<section>
+	  <div class="container">
+		<div class="row align-items-center">
+		  <div class="col order-lg-1">
+			<div class="p-5">
+			  <h2 class="display-4">Associated Entity</h2>
+			</div>
+		  </div>
+		  <div class="col order-lg-1">
+			<div class="p-5">
+				<p>Awesome entity</p>
+				<a href=images/{{persona}}>
+		  			<img src="{{image_url}}" heigh="150" width="150"/>
+	  			</a>
+			</div>
+		  </div>
+		</div>
+	  </div>
+	</section>
+	{% endfor %}    
+	
+	{% for image_url in predicted_image_urls %}
+	<section>
+	  <div class="container">
+		<div class="row align-items-center">
+		  <div class="col order-lg-1">
+			<div class="p-5">
+			  <h2 class="display-4">Predicted Faces</h2>
+			</div>
+		  </div>
+		  <div class="col order-lg-1">
+			<div class="p-5">
+				<p>Awesome entity</p>
+				<img src="{{image_url}}" height="150" width="150" />
+			</div>
+		  </div>
+		</div>
+	  </div>
+	</section>
+	{% endfor %}    
+{% endblock %}

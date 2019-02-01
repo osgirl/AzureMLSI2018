@@ -70,8 +70,8 @@ def getRawTestImagesFromBlobStore(bs_account_name, bs_account_key, bs_container)
     blob_service = BlockBlobService(account_name=bs_account_name, account_key=bs_account_key, endpoint_suffix="core.windows.net")
     logging.info("Created blob service client using {0} account {1} container".format(bs_account_name, bs_container))
 
-    choice_blobs = blob_service.list_blobs(bs_container)
-    logging.info("Grabbed blob list in container {0}".format(bs_container));
+    choice_blobs = list(blob_service.list_blobs(bs_container))
+    logging.info("Grabbed list of {0} blobs in container {1}".format(len(choice_blobs), bs_container));
     
     #Selects a sample of test data to test the parallelization of the ingest
     #choice_blobs = random.choices(list(blobs), k=20)
@@ -79,7 +79,8 @@ def getRawTestImagesFromBlobStore(bs_account_name, bs_account_key, bs_container)
     def byteGetter(blob):
         blob_bytes = blob_service.get_blob_to_bytes(bs_container, blob.name)
         return blob_bytes.content
-    choice_blob_bytes = map(byteGetter, choice_blobs)
+    choice_blob_bytes = list(map(byteGetter, choice_blobs))
+    logging.info("Retrieved bytes for {0} blobs".format(len(choice_blob_bytes)));
     
     return zip(choice_blobs, choice_blob_bytes)
 
@@ -113,7 +114,8 @@ def processEntityImages(choice_blobs, db_account_name, db_account_key, ca_file_u
             return None
     #Convert the base image to PIL object, then detect and extract the face component of the image
     blob_image_faces = list(map(lambda blob_tuple: (blob_tuple[0], Image.open(io.BytesIO(blob_tuple[1])), extractFace(blob_tuple[1])), choice_blobs))
-    logging.debug("Face detection run on {0} images".format(len(blob_image_faces)))
+    blob_image_faces = list(filter(lambda x: x[2] is not None, blob_image_faces))
+    logging.info("Faces detected/extracted from {0} images".format(len(blob_image_faces)))
 
     #Connect to the database
     ssl_opts = {
@@ -157,86 +159,84 @@ def processEntityImages(choice_blobs, db_account_name, db_account_key, ca_file_u
     sender = client.add_sender(partition="0")
     client.run()
 
-    
     face_write_count = 0
     face_label_write_count = 0
     face_unlabeled_write_count = 0
 
     for (blob, image_bytes, face_bytes) in blob_image_faces:
-        if face_bytes is not None:
-            file_name = blob.name
-            (entity, usage, number) = file_name.split('-')
-        
-            #Generate the face classifier features from the face using VGG-face on Keras
-            if face_bytes.mode != "RGB":
-                    face_bytes = face_bytes.convert("RGB")
-            face_bytes = face_bytes.resize((img_width, img_height))
-            image = img_to_array(face_bytes)
-            image = np.expand_dims(image, axis=0)
-            image = imagenet_utils.preprocess_input(image)
-            stuff = vgg_face_feature_gen.predict(image, batch_size=1).flatten()
-            writer = avro.io.DatumWriter(schema)
-            bytes_writer = io.BytesIO()
-            encoder = avro.io.BinaryEncoder(bytes_writer)
-            writer.write({"features": stuff.tolist()}, encoder)
-            face_feature_bytes = bytes_writer.getvalue()
-            #For each image extract the label and use to generate a persona, redundant writes will cancel out
+        file_name = blob.name
+        (entity, usage, hash) = file_name.split('-')
+    
+        #Generate the face classifier features from the face using VGG-face on Keras
+        if face_bytes.mode != "RGB":
+                face_bytes = face_bytes.convert("RGB")
+        face_bytes = face_bytes.resize((img_width, img_height))
+        image = img_to_array(face_bytes)
+        image = np.expand_dims(image, axis=0)
+        image = imagenet_utils.preprocess_input(image)
+        stuff = vgg_face_feature_gen.predict(image, batch_size=1).flatten()
+        writer = avro.io.DatumWriter(schema)
+        bytes_writer = io.BytesIO()
+        encoder = avro.io.BinaryEncoder(bytes_writer)
+        writer.write({"features": stuff.tolist()}, encoder)
+        face_feature_bytes = bytes_writer.getvalue()
+        #For each image extract the label and use to generate a persona, redundant writes will cancel out
 
-            #Writes the entity label to the persona table 
-            #For the time being also write the entity label to the subpersona table and associate with the persona table
-            session.execute(personaInsertQuery, (entity,))
-            session.execute(subPersonaInsertQuery, (entity, entity))
-            logging.info("Writing persona, sub-persona {0} to DB table {1}".format(entity, subPersonaTableName))
-            
-            #Resizes the image to ensure the write query does not exceed maximum size
-            width, height = image_bytes.size
-            if width > height:
-                transform_factor = 256/width
-            else:
-                transform_factor = 256/height
-            compact_image_bytes = image_bytes.resize((round(height*transform_factor), round(width*transform_factor))) 
-            
-            #Writes the raw image to its table
-            imgByteArr = io.BytesIO()
-            compact_image_bytes.save(imgByteArr, format='PNG')
-            compact_image_bytes = imgByteArr.getvalue()
-            hashed_bytes = hashlib.md5(compact_image_bytes).digest()
-            hashed_bytes_int = int.from_bytes(hashed_bytes, byteorder='big') #Good identifier, sadly un
-            image_hash = str(hashed_bytes_int) #Stupid workaround to Python high precision int incompatability
-            session.execute(rawInsertQuery, (image_hash, file_name, compact_image_bytes))
-            logging.info("Writing raw image to DB {0}".format(image_hash))
-            
-            #Resizes the image to ensure the write query does not exceed maximum size
-            width, height = face_bytes.size
-            if width > height:
-                transform_factor = 256/width
-            else:
-                transform_factor = 256/height
-            compact_face_bytes = face_bytes.resize((round(height*transform_factor), round(width*transform_factor))) 
-            
-            #Write each face extracted from the image to the DB as a refined image
-            imgByteArr = io.BytesIO()
-            compact_face_bytes.save(imgByteArr, format='PNG')
-            compact_face_bytes = imgByteArr.getvalue()
-            face_hash_bytes = hashlib.md5(compact_face_bytes).digest()
-            face_hashed_bytes_int = int.from_bytes(face_hash_bytes, byteorder='big') #Good identifier, sadly un
-            face_hash = str(face_hashed_bytes_int) #Stupid workaround to Python high precision int incompatability
-            session.execute(refinedInsertQuery, (face_hash, image_hash, compact_face_bytes, face_feature_bytes))
-            logging.info("Writing face image to DB {0}".format(face_hash))
-            face_write_count += 1
-            
-            #If the data is part of the training set, write edges between the sub-personas, face images
-            if usage == "Train":
-                session.execute(subPersonaFaceEdgeInsertQuery, (entity, face_hash, True))
-                session.execute(faceSubPersonaEdgeInsertQuery, (entity, face_hash, True))
-                sender.send(EventData(json.dumps({"EVENT_TYPE": "LABEL_WRITE", "LABEL_INDEX":face_hash, "WRITE_TIMESTAMP": datetime.datetime.now().timestamp()})))
-                logging.info("Writing face label to DB {0}".format(face_hash))
-                face_label_write_count += 1
-            else:
-                #Silly engineering workaround to make it easier to find the unlabeled images later for re-prediction
-                logging.info("Ignoring unlabeled face {0} to DB".format(face_hash))
-                face_unlabeled_write_count += 1
-            #Otherwise do not write an edge, these will be predicted later by the training service
+        #Writes the entity label to the persona table 
+        #For the time being also write the entity label to the subpersona table and associate with the persona table
+        session.execute(personaInsertQuery, (entity,))
+        session.execute(subPersonaInsertQuery, (entity, entity))
+        logging.info("Writing persona/sub-persona {0}, image hash {1} to DB table {2}".format(entity, hash, subPersonaTableName))
+        
+        #Resizes the image to ensure the write query does not exceed maximum size
+        width, height = image_bytes.size
+        if width > height:
+            transform_factor = 256/width
+        else:
+            transform_factor = 256/height
+        compact_image_bytes = image_bytes.resize((round(height*transform_factor), round(width*transform_factor))) 
+        
+        #Writes the raw image to its table
+        imgByteArr = io.BytesIO()
+        compact_image_bytes.save(imgByteArr, format='PNG')
+        compact_image_bytes = imgByteArr.getvalue()
+        hashed_bytes = hashlib.md5(compact_image_bytes).digest()
+        hashed_bytes_int = int.from_bytes(hashed_bytes, byteorder='big') #Good identifier, sadly un
+        image_hash = str(hashed_bytes_int) #Stupid workaround to Python high precision int incompatability
+        session.execute(rawInsertQuery, (image_hash, file_name, compact_image_bytes))
+        logging.info("Writing raw image to DB {0}".format(image_hash))
+        
+        #Resizes the image to ensure the write query does not exceed maximum size
+        width, height = face_bytes.size
+        if width > height:
+            transform_factor = 256/width
+        else:
+            transform_factor = 256/height
+        compact_face_bytes = face_bytes.resize((round(height*transform_factor), round(width*transform_factor))) 
+        
+        #Write each face extracted from the image to the DB as a refined image
+        imgByteArr = io.BytesIO()
+        compact_face_bytes.save(imgByteArr, format='PNG')
+        compact_face_bytes = imgByteArr.getvalue()
+        face_hash_bytes = hashlib.md5(compact_face_bytes).digest()
+        face_hashed_bytes_int = int.from_bytes(face_hash_bytes, byteorder='big') #Good identifier, sadly un
+        face_hash = str(face_hashed_bytes_int) #Stupid workaround to Python high precision int incompatability
+        session.execute(refinedInsertQuery, (face_hash, image_hash, compact_face_bytes, face_feature_bytes))
+        logging.info("Writing face image to DB {0}".format(face_hash))
+        face_write_count += 1
+        
+        #If the data is part of the training set, write edges between the sub-personas, face images
+        if usage == "Train":
+            session.execute(subPersonaFaceEdgeInsertQuery, (entity, face_hash, True))
+            session.execute(faceSubPersonaEdgeInsertQuery, (entity, face_hash, True))
+            sender.send(EventData(json.dumps({"EVENT_TYPE": "LABEL_WRITE", "LABEL_INDEX":face_hash, "WRITE_TIMESTAMP": datetime.datetime.now().timestamp()})))
+            logging.info("Writing face label to DB {0}".format(face_hash))
+            face_label_write_count += 1
+        else:
+            #Silly engineering workaround to make it easier to find the unlabeled images later for re-prediction
+            logging.info("Ignoring unlabeled face {0} to DB".format(face_hash))
+            face_unlabeled_write_count += 1
+        #Otherwise do not write an edge, these will be predicted later by the training service
 
     #session.close()
     client.stop()
@@ -253,9 +253,8 @@ def imgPreprocessing(image_file):
     return decoded
 
 def main ():
-    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
-    FORMAT = '%(asctime) %(message)s'
-    logging.basicConfig(format=FORMAT)
+    #logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+    logging.basicConfig(filename="./inputservice.log", level=logging.INFO)
     
     #Check if the blob storage access credentials have been loaded as a secret volume use them
     if os.path.exists('/tmp/secrets/bs/blob-storage-account'):
@@ -298,7 +297,6 @@ def main ():
     else:
         merged_config = yaml.safe_load_all(open("../cluster-deployment.yml"))
         for config in merged_config:
-            print(config)
             if config['metadata']['name'] == 'azmlsi-bs-config':
                 bs_container_name = config['data']['blob-storage-con']
             if config['metadata']['name'] == 'azmlsi-db-config':

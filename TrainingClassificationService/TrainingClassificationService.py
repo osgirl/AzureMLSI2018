@@ -56,19 +56,18 @@ def isNewLabeledData(eh_url, eh_offset_url, eh_account, eh_key):
     #Retrieves the current offset/sequence number for the write event queue from the dedicated offset queue
     offsets = offset_receiver.receive(timeout=50)
     current_offset = -1 #Default to -1 or reading the entire feed if another offset is not retrieved
-    logging.info(len(offsets))
+    logging.info("{0} write messages recieved".format(len(offsets)))
     for offset in offsets:
         offset_event = json.loads(offset.body_as_str())
         current_offset = offset_event['CURRENT_OFFSET']
         logging.info("Retrieved previous offset event {0}".format(offset_event))
-    
     current_offset = -1
     
     #Use the retrieved offset/sequence number to retrieve new writes
     event_client = EventHubClient(eh_url, debug=False, username=eh_account, password=eh_key)
     receiver = event_client.add_receiver(CONSUMER_GROUP, PARTITION, prefetch=5000, offset=Offset(current_offset))
     event_client.run()
-    batch = receiver.receive(timeout=5000)
+    batch = receiver.receive(timeout=50)
     new_label_count = len(batch)
     for stuff in batch:
         logging.info("Offset {0}".format(stuff.sequence_number))
@@ -92,19 +91,22 @@ def retrainClassifier(session, db_config):
     '''
     Gathers available labeled faces from the database for personas, sub-personas to train a new keras classifier
     '''
+    
+    #Get table names from the config
     (keyspace, personaTableName, subPersonaTableName, subPersonaFaceEdgeTableName, faceSubPersonaEdgeTableName, rawImageTableName, faceImageTableName) = getTables(db_config)
 
-    #Prepare Cosmos DB session and insertion queries
+    #Grab the list of personas to retrieve their labels
     persona_list = list(session.execute("SELECT persona_name FROM " + personaTableName))
-    unique_features_set = set()
+    persona_list = list(map(lambda x: x.persona_name, persona_list))
+
     features_list = []
     labels_list = []
+    logging.info("Found {0} personas".format(len(persona_list)))
     for persona in persona_list:
-        logging.info("Retrieving features for {0}".format(persona.persona_name))
-        image_id_list = session.execute("SELECT sub_persona_name, assoc_face_id, label_v_predict_assoc_flag FROM {0} WHERE sub_persona_name='{1}'".format(subPersonaFaceEdgeTableName, persona.persona_name))
-
+        image_id_list = list(session.execute("SELECT sub_persona_name, assoc_face_id, label_v_predict_assoc_flag FROM {0} WHERE sub_persona_name='{1}'".format(subPersonaFaceEdgeTableName, persona)))
+        logging.info("{0} features retrieved for {1}".format(len(image_id_list), persona))
         for image_id in image_id_list:
-            image_features = session.execute("SELECT face_id, face_bytes, feature_bytes FROM {0} WHERE face_id='{1}'".format(faceImageTableName, image_id.assoc_face_id))
+            image_features = list(session.execute("SELECT face_id, face_bytes, feature_bytes FROM {0} WHERE face_id='{1}'".format(faceImageTableName, image_id.assoc_face_id)))
             for image_byte in image_features:
                 schema = avro.schema.Parse(open("./VGGFaceFeatures.avsc", "rb").read())
                 bytes_reader = io.BytesIO(image_byte.feature_bytes)
@@ -112,26 +114,28 @@ def retrainClassifier(session, db_config):
                 reader = avro.io.DatumReader(schema)
                 features = reader.read(decoder)
                 
-                unique_features_set.add(persona.persona_name)
                 features_list.append(features['features'])
-                labels_list.append(persona.persona_name)
+                labels_list.append(persona)
+        time.sleep(60)
     
-        #Convert the features and labels into keras compatible structures, train dense NN classifier
-        unique_features_list = list(unique_features_set)
-        homogenized_label_list = list(map(lambda x: unique_features_list.index(x), labels_list))
-        model = Sequential()
-        model.add(Dense(1024, input_dim=512, activation='relu')) #we add dense layers so that the model can learn more complex functions and classify for better results.
-        model.add(Dense(1024,activation='relu')) #dense layer 2
-        model.add(Dense(512,activation='relu')) #dense layer 3
-        model.add(Dense(1,activation='sigmoid')) #final layer with softmax activation
-        model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-        model.fit(x=np.array(features_list), y=np.array(homogenized_label_list), epochs=5, batch_size=1)
-        scores = model.evaluate(np.array(features_list), np.array(homogenized_label_list))
+    #Convert the persona labels into integers for keras, produce reversal dictionary
+    homogenized_label_list = list(map(lambda x: persona_list.index(x), labels_list))
+    label_persona_dictionary = dict(map(lambda x: (persona_list.index(x), x), persona_list))
+    #label_persona_dictionary = dict(zip(homogenized_label_list, persona_list))
+    logging.info("Generated conversion dictionary")
+    logging.info(label_persona_dictionary)
 
-        onnx_model = onnxmltools.convert_keras(model)
-        onnxmltools.utils.save_model(onnx_model, 'example.onnx')
-        
-        return model
+    model = Sequential()
+    model.add(Dense(1024, input_dim=512, activation='relu')) #we add dense layers so that the model can learn more complex functions and classify for better results.
+    model.add(Dense(1024,activation='relu')) #dense layer 2
+    model.add(Dense(512,activation='relu')) #dense layer 3
+    model.add(Dense(1,activation='sigmoid')) #final layer with softmax activation
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.fit(x=np.array(features_list), y=np.array(homogenized_label_list), epochs=2, batch_size=1)
+    scores = model.evaluate(np.array(features_list), np.array(homogenized_label_list))
+    logging.info("Generated model")
+    
+    return (model, label_persona_dictionary)
     
 def getTables(db_config=None):
     '''
@@ -155,7 +159,7 @@ def getTables(db_config=None):
         faceImageTableName = db_config['db-face-image-table']
     return (keyspace, personaTableName, subPersonaTableName, subPersonaFaceEdgeTableName, faceSubPersonaEdgeTableName, rawImageTableName, faceImageTableName)
 
-def repredictImages(session, model, db_config):
+def repredictImages(session, model, db_config, label_persona_dict):
     #If no db config file is passed, look for the container environment variables
     (keyspace, personaTableName, subPersonaTableName, subPersonaFaceEdgeTableName, faceSubPersonaEdgeTableName, rawImageTableName, faceImageTableName) = getTables(db_config)
     
@@ -164,38 +168,86 @@ def repredictImages(session, model, db_config):
     labeled_face_ids = filter(lambda x: x.label_v_predict_assoc_flag == True, labeled_face_ids)
     labeled_face_ids = list(map(lambda x: x.assoc_face_id, labeled_face_ids))
     logging.info("Retrieved {0} labeled image ids".format(len(labeled_face_ids)))
+    time.sleep(5)
     
     #Collect facial images which are not labeled to be re-predicted
     #list(session.execute("SELECT assoc_face_id FROM {0} WHERE sub_persona_name={1}".format(faceSubPersonaEdgeTableName, "TEMPORARY")))
     unlabeled_face_ids = list(session.execute("SELECT face_id FROM {0}".format(faceImageTableName)))
-    logging.info("Retrieved {0} unlabeled face ids".format(len(unlabeled_face_ids)))
     unlabeled_face_ids = list(filter(lambda x: x.face_id not in labeled_face_ids, unlabeled_face_ids))
     logging.info("Retrieved {0} unlabeled face ids".format(len(unlabeled_face_ids)))
+    time.sleep(5)
     
-    '''
-    unlabeled_images = list(filter(lambda x: x.image_id not in labeled_face_ids, unlabeled_images))
-    logging.info("Retrieved {0} unlabeled images".format(len(unlabeled_images)))
+    unlabeled_face_tuples = []
+    for row in unlabeled_face_ids:
+        results = list(session.execute("SELECT face_id, feature_bytes FROM " + faceImageTableName + " WHERE face_id= %s", (row.face_id,)))
+        unlabeled_face_tuples.append((results[0].face_id, results[0].feature_bytes))
+        time.sleep(5)
+    logging.info("Retrieved {0} unlabeled face image features".format(len(unlabeled_face_tuples)))
     
     #Label unlabeled images
-    def predictImage(image_features):
+    def predictImage(face_tuple):
+        
+        face_feature_bytes = face_tuple[1]
+        
         schema = avro.schema.Parse(open("./VGGFaceFeatures.avsc", "rb").read())
-        bytes_reader = io.BytesIO(image_features.feature_bytes)
+        bytes_reader = io.BytesIO(face_feature_bytes)
         decoder = avro.io.BinaryDecoder(bytes_reader)
         reader = avro.io.DatumReader(schema)
-        features = reader.read(decoder)
         
-        #
-        prediction = model.predict(features)
-        logging.info(prediction)
-        return prediction
-    prediction_labels = map(predictImage, unlabeled_images)
-    '''
-    return True
+        #Extract the feature array and turn into a nested np array for keras
+        features = np.array(reader.read(decoder)['features'])
+        features = features.reshape(1,512)
+        #Classify and convert to integer, then retrieve original label string
+        prediction = str(int(model.predict(features, batch_size=1).item(0)))
+        prediction = label_persona_dict[prediction]
+        return (face_tuple[0], prediction)
+    predictions = list(map(predictImage, unlabeled_face_tuples))
+    
+    #Write the predicted face classess to the DB for the visualization
+    edgeInsertQuery = session.prepare("INSERT INTO " + subPersonaFaceEdgeTableName + " (sub_persona_name, assoc_face_id, label_v_predict_assoc_flag) VALUES (?,?,?)")
+    edgeInsertQuery2 = session.prepare("INSERT INTO " + faceSubPersonaEdgeTableName + " (sub_persona_name, assoc_face_id, label_v_predict_assoc_flag) VALUES (?,?,?)")
+    for prediction in predictions:
+        logging.info("Writing predicted edge for {0} persona, {1} face to the DB".format(prediction[1], prediction[0]))
+        session.execute(edgeInsertQuery, (prediction[1], prediction[0], False))
+        session.execute(edgeInsertQuery2, (prediction[1], prediction[0], False))
+    
+    #return True
         
+def saveModel(model, label_persona_dict):
+    onnx_model = onnxmltools.convert_keras(model)
+    onnxmltools.utils.save_model(onnx_model, 'example.onnx')
+
+    model_json = model.to_json()
+    with open("model.json", "w") as json_file:
+        json_file.write(model_json)
+    # serialize weights to HDF5
+    model.save_weights("model.h5")
+    logging.info("Saved model to disk")
+    
+    dict_writer = open("./label_persona_dict.json", 'w')
+    serialized_dict = json.dumps(label_persona_dict)
+    dict_writer.write(serialized_dict)
+    dict_writer.close()
+    logging.info("Saved dict to disk")
+    
+
+def loadModel():
+    json_file = open('model.json', 'r')
+    loaded_model_json = json_file.read()
+    json_file.close()
+    loaded_model = keras.models.model_from_json(loaded_model_json)
+    # load weights into new model
+    loaded_model.load_weights("model.h5")
+    logging.info("Loaded model from disk")
+    
+    dict_reader = open("./label_persona_dict.json", 'r')
+    label_persona_dict = json.loads(dict_reader.read())
+    logging.info(label_persona_dict)
+    dict_reader.close()
+    return (loaded_model, label_persona_dict)
+
 def main():
-    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
-    FORMAT = '%(asctime) %(message)s'
-    logging.basicConfig(format=FORMAT)
+    logging.basicConfig(filename="./TrainingService.log", level=logging.INFO)
     
     ca_file_uri = "./cacert.pem"
 
@@ -250,8 +302,12 @@ def main():
     #Workspace.get("azmlsiws", subscription_id="0b753943-9062-4ec0-9739-db8fb455aeba", resource_group="CommercialCyberAzure")
                 
     if isNewLabeledData(eh_url, eh_offset_url, eh_account, eh_key):
-        model = retrainClassifier(session, db_config)
-        repredictImages(session, model, db_config)
+
+        (model, label_persona_dict) = retrainClassifier(session, db_config)
+        saveModel(model, label_persona_dict)
+        (model, label_persona_dict) = loadModel()
+        repredictImages(session, model, db_config, label_persona_dict)
+
 if __name__ == '__main__':
     '''
 
