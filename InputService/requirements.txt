@@ -4,7 +4,7 @@ azure-common>=1.1.15
 azure-cosmos>=1.0.0
 cassandra-driver>=1.0.0
 numpy
-avro
+avro-python3>=1.8
 pillow
 pyyaml
 tensorflow-gpu>=1.12
@@ -13,3 +13,5 @@ Scikit-learn>=0.20
 cognitive_face>=1.4
 keras_vggface
 Flask>=1.0.0
+azure-mgmt>=4.0
+Azure-eventhub>=1.3
