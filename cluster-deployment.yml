@@ -208,3 +208,100 @@ spec:
     port: 10350
     targetPort: 10350
   type: LoadBalancer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: azmlsi-trainingclassification-deployment
+  labels:
+    app: azmlsi-trainingclassification-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+        app: azmlsi-trainingclassification-deployment
+  template:
+    metadata:
+      labels:
+        app: azmlsi-trainingclassification-deployment
+    spec:
+      containers:
+      - name: azmlsi-trainingclassification
+        image: azmlsiacr.azurecr.io/trainingclassification-service
+        tty: true
+        env:
+        - name: BS_TEST_CON
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-bs-config
+              key: blob-storage-con
+        - name: DB_KEYSPACE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-keyspace
+        - name: DB_PERSONA_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-persona-table
+        - name: DB_SUB_PERSONA_FACE_EDGE_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-sub-persona-face-edge-table
+        - name: DB_FACE_SUB_PERSONA_EDGE_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-face-sub-persona-edge-table
+        - name: DB_FACE_IMAGE_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-face-image-table
+        - name: DB_RAW_IMAGE_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-raw-image-table
+        ports:
+        - containerPort: 10350
+          name: azure-cosmo-db
+        - containerPort: 80
+          name: azure-file-str
+        volumeMounts:
+        - name: bs-secrets
+          mountPath: /tmp/secrets/bs
+          readOnly: true
+        - name: db-secrets
+          mountPath: /tmp/secrets/db
+          readOnly: true
+      imagePullSecrets:
+      - name: image-pull-secrets
+      volumes:
+      - name: bs-secrets
+        secret:
+          secretName: bs-secrets
+      - name: db-secrets
+        secret:
+          secretName: db-secrets
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: azmlsi-trainingclassification-service
+spec:
+  selector:
+    app: azmlsi-trainingclassification-deployment
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+    name: azure-file-str
+  - protocol: TCP
+    port: 10350
+    targetPort: 10350
+    name: azure-cosmos-db
+  type: LoadBalancer
+
