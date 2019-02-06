@@ -1,0 +1,7 @@
+{"namespace": "VGGFaceFeatures.avro",
+ "type": "record",
+ "name": "VGGFaceFeatures",
+ "fields": [
+ 	{"name": "features", "type": ["null", {"type": "array", "items": "double"}]}
+ ]
+}
