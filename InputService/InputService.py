@@ -43,7 +43,7 @@ from azure.mgmt.eventhub.models import eh_namespace
 img_width = 300
 img_height = 300
 vgg_face_feature_gen = VGGFace(include_top=False, input_shape=(img_width, img_height, 3), pooling='avg') # pooling: None, avg or max
-schema = avro.schema.Parse(open("./VGGFaceFeatures.avsc", "rb").read())
+schema = avro.schema.Parse(open("./VGGFaceFeatures.avsc", "r").read())
 
 from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
 
@@ -269,9 +269,9 @@ def main ():
         cs_key = open('/tmp/secrets/cs/cs-key').read()
         logging.debug('')
 
-        eh_url = open('').read()
-        eh_account = open('').read()
-        eh_key = open('').read()
+        eh_url = open('/tmp/secrets/eh/eh-url').read()
+        eh_account = open('/tmp/secrets/eh/eh-account').read()
+        eh_key = open('/tmp/secrets/eh/eh-key').read()
         
     #Otherwise assume it is being run locally and load from environment variables
     else: 
