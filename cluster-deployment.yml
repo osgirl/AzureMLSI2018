@@ -91,6 +91,12 @@ spec:
         - name: db-secrets
           mountPath: /tmp/secrets/db
           readOnly: true
+        - name: cs-secrets
+          mountPath: /tmp/secrets/cs
+          readOnly: true
+        - name: eh-secrets
+          mountPath: /tmp/secrets/eh
+          readOnly: true
       restartPolicy: Never
       imagePullSecrets:
       - name: image-pull-secrets
@@ -101,6 +107,12 @@ spec:
       - name: db-secrets
         secret:
           secretName: db-secrets
+      - name: cs-secrets
+        secret:
+          secretName: cs-secrets
+      - name: eh-secrets
+        secret:
+          secretName: eh-secrets
 ---
 kind: Service
 apiVersion: v1
@@ -118,6 +130,16 @@ spec:
     port: 10350
     targetPort: 10350
     name: azure-cosmos-db
+
+
+
+
+
+
+
+
+
+
 ---
 apiVersion: apps/v1
 kind: Deployment
