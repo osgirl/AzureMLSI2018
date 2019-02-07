@@ -59,6 +59,13 @@ az acr update --name $CONTAINER_ACCOUNT --admin-enabled true
 ACR_LOGIN_USERNAME=`az acr credential show --name $CONTAINER_ACCOUNT --output json | jq -r '.username'`
 ACR_LOGIN_KEY=`az acr credential show --name $CONTAINER_ACCOUNT --output json | jq -r '.passwords|.[0]|.value'`
 
+#Get eventhub credential string
+export EH_KEY=`az eventhubs namespace authorization-rule keys list --resource-group CommercialCyberAzure --namespace azmlsieh --name RootManageSharedAccessKey | jq -r '.primaryKey'`
+export EH_ACCOUNT=`az eventhubs namespace authorization-rule keys list --resource-group CommercialCyberAzure --namespace azmlsieh --name RootManageSharedAccessKey | jq -r '.keyName'`
+export EH_NAMESPACE=azmlsieh
+export EH_NAME=testhub
+export EH_URL="://azmlsieh.servicebus.windows.net/"
+
 #Build and deploy containers to Azure Container Registry
 #ACR_URI="$CONTAINER_ACCOUNT.azurecr.us" #For gov't
 ACR_URI="$URL_CONTAINER_ACCOUNT.azurecr.io" #For Commercial
@@ -81,6 +88,7 @@ YOUR_MAIL=wharton_caleb@bah.com
 BLOB_SECRET_NAME=bs-secrets
 DB_SECRET_NAME=db-secrets
 CS_SECRET_NAME=cs-secrets
+EH_SECRET_NAME=eh-secrets
 #Login to Azure Kubernetes cluster
 az aks get-credentials --resource-group $RESOURCE_GROUP --name $AKSNAME
 
@@ -92,7 +100,8 @@ export K8_CLUSTER_CONFIG="./cluster-deployment.yml"
 kubectl create secret docker-registry $CR_SECRET_NAME --docker-server $ACR_URI --docker-email $YOUR_MAIL --docker-username=$ACR_LOGIN_USERNAME --docker-password $ACR_LOGIN_KEY
 kubectl create secret generic $BLOB_SECRET_NAME --from-literal=blob-storage-account=$BLOB_STORAGE_ACCOUNT --from-literal=blob-storage-key=$BLOB_STORAGE_KEY
 kubectl create secret generic $DB_SECRET_NAME --from-literal=db-account=$COSMOS_DB_ACCOUNT --from-literal=db-key=$COSMOS_DB_KEY
-kubectl create secret generic $CS_SECRET_NAME --from-literal=cs-account=$COG_SERV_NAME --from-literal=db-key=$COG_SERV_KEY
+kubectl create secret generic $CS_SECRET_NAME --from-literal=cs-account=$COG_SERV_NAME --from-literal=cs-key=$COG_SERV_KEY
+kubectl create secret generic $EH_SECRET_NAME --from-literal=eh-url=$EH_NAMESPACE$EH_URL$EH_NAME --from-literal=eh-account=$EH_ACCOUNT --from-literal=eh-key=$EH_KEY
 kubectl create -f $K8_CLUSTER_CONFIG
 
 
