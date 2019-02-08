@@ -100,8 +100,12 @@ def processEntityImages(choice_blobs, db_account_name, db_account_key, ca_file_u
         '''
         
         '''
-        face_list = CF.face.detect(image_bytes)
-        
+        try:
+            face_list = CF.face.detect(image_bytes)
+        except:
+            print("Cannot detect face")
+            return None
+
         if len(face_list) == 1:
             face_rectangle = face_list[0]['faceRectangle']
             nparr = np.fromstring(image_bytes, np.uint8)
@@ -132,10 +136,10 @@ def processEntityImages(choice_blobs, db_account_name, db_account_key, ca_file_u
         keyspace = os.environ['DB_KEYSPACE']
         personaTableName = os.environ['DB_PERSONA_TABLE']
         subPersonaTableName = os.environ['DB_SUB_PERSONA_TABLE']
-        subPersonaFaceEdgeTableName = os.environ['DB_SUB_PERSONA_EDGE_TABLE']
-        faceSubPersonaEdgeTableName = os.environ['DB_SUB_PERSONA_EDGE_TABLE']
+        subPersonaFaceEdgeTableName = os.environ['DB_SUB_PERSONA_FACE_EDGE_TABLE']
+        faceSubPersonaEdgeTableName = os.environ['DB_FACE_SUB_PERSONA_EDGE_TABLE']
         rawImageTableName = os.environ['DB_RAW_IMAGE_TABLE']
-        faceTableName = os.environ['DB_REFINED_IMAGE_TABLE']
+        faceTableName = os.environ['DB_FACE_IMAGE_TABLE']
     #Otherwise load db config
     else:
         keyspace = db_config['db-keyspace']
