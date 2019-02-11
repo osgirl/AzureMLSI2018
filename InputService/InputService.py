@@ -15,6 +15,7 @@ import datetime
 
 import yaml
 import io
+import requests
 
 import numpy as np
 #import cv2
@@ -92,30 +93,40 @@ def processEntityImages(choice_blobs, db_account_name, db_account_key, ca_file_u
     '''
 
     #Initialize the cognitive services account to perform facial detection
-    BASE_CS_URL = 'https://virginia.api.cognitive.microsoft.us/face/v1.0/'  # Replace with your regional Base URL
-    CF.Key.set(cs_key)
-    CF.BaseUrl.set(BASE_CS_URL)
+    url = "https://eastus.api.cognitive.microsoft.com/face/v1.0/detect"
+    headers    = {'Ocp-Apim-Subscription-Key': cs_key,
+              'Content-Type': 'application/octet-stream'}
+
+
     
     def extractFace(image_bytes):
         '''
         
         '''
         try:
-            face_list = CF.face.detect(image_bytes)
+            response = requests.post(url,headers=headers, data=image_bytes)
         except:
-            print("Cannot detect face")
+            logging.info("Cannot detect face")
             return None
 
-        if len(face_list) == 1:
-            face_rectangle = face_list[0]['faceRectangle']
-            nparr = np.fromstring(image_bytes, np.uint8)
-            img_byte = Image.open(io.BytesIO(image_bytes))
-            face_iso_image =img_byte.crop((face_rectangle['left'], face_rectangle['top'], face_rectangle['left'] + face_rectangle['width'], 
-                face_rectangle['top'] + face_rectangle['height']))
+        face_list = response.json()
 
-            return face_iso_image
-        else:
+        try:
+
+            if len(face_list) == 1:
+                face_rectangle = face_list[0]['faceRectangle']
+                nparr = np.fromstring(image_bytes, np.uint8)
+                img_byte = Image.open(io.BytesIO(image_bytes))
+                face_iso_image =img_byte.crop((face_rectangle['left'], face_rectangle['top'], face_rectangle['left'] + face_rectangle['width'], 
+                    face_rectangle['top'] + face_rectangle['height']))
+
+                return face_iso_image
+            else:
+                return None
+
+        except:
             return None
+
     #Convert the base image to PIL object, then detect and extract the face component of the image
     blob_image_faces = list(map(lambda blob_tuple: (blob_tuple[0], Image.open(io.BytesIO(blob_tuple[1])), extractFace(blob_tuple[1])), choice_blobs))
     blob_image_faces = list(filter(lambda x: x[2] is not None, blob_image_faces))

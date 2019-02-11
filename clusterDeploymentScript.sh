@@ -13,6 +13,7 @@ export BLOB_CONTAINER_NAME="test-data-con"
 
 
 COG_SERV_NAME="azmlsi_face_matcher"
+COG_GROUP="SAIML"
 #LOCATION="usgovarizona"
 LOCATION="eastus"
 
@@ -50,7 +51,7 @@ yq w -i -d1 cluster-deployment.yml 'data.blob-storage-con' $BLOB_CONTAINER_NAME
 #Generate new Azure Cognitive Services API for facial detection
 az cognitiveservices account create --name $COG_SERV_NAME --resource-group $RESOURCE_GROUP --kind Face --sku S0 -l $LOCATION
 az cognitiveservices account delete --name $COG_SERV_NAME --resource-group $RESOURCE_GROUP
-COG_SERV_KEY=`az cognitiveservices account keys list --name $COG_SERV_NAME --resource-group $RESOURCE_GROUP -o json | jq -r '.key1'`
+COG_SERV_KEY=`az cognitiveservices account keys list --name $COG_SERV_NAME --resource-group $COG_GROUP -o json | jq -r '.key1'`
 
 #Generate an Azure Container Registry and extract access credentials
 az acr create --name $CONTAINER_ACCOUNT --resource-group $RESOURCE_GROUP --sku Standard --location $LOCATION

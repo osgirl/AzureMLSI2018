@@ -28,7 +28,7 @@ metadata:
 spec:
   completions : 1
   backoffLimit: 3
-  activeDeadlineSeconds: 600
+  activeDeadlineSeconds: 600000
   template:
     metadata:
       labels:
