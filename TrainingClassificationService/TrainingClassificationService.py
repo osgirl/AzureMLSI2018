@@ -102,13 +102,13 @@ def retrainClassifier(session, db_config):
     features_list = []
     labels_list = []
     logging.info("Found {0} personas".format(len(persona_list)))
+    schema = avro.schema.Parse(open("./VGGFaceFeatures.avsc", "rb").read())
     for persona in persona_list:
         image_id_list = list(session.execute("SELECT sub_persona_name, assoc_face_id, label_v_predict_assoc_flag FROM {0} WHERE sub_persona_name='{1}'".format(subPersonaFaceEdgeTableName, persona)))
         logging.info("{0} features retrieved for {1}".format(len(image_id_list), persona))
         for image_id in image_id_list:
             image_features = list(session.execute("SELECT face_id, face_bytes, feature_bytes FROM {0} WHERE face_id='{1}'".format(faceImageTableName, image_id.assoc_face_id)))
             for image_byte in image_features:
-                schema = avro.schema.Parse(open("./VGGFaceFeatures.avsc", "rb").read())
                 bytes_reader = io.BytesIO(image_byte.feature_bytes)
                 decoder = avro.io.BinaryDecoder(bytes_reader)
                 reader = avro.io.DatumReader(schema)
@@ -116,7 +116,7 @@ def retrainClassifier(session, db_config):
                 
                 features_list.append(features['features'])
                 labels_list.append(persona)
-        time.sleep(60)
+        #time.sleep(60)
     
     #Convert the persona labels into integers for keras, produce reversal dictionary
     homogenized_label_list = list(map(lambda x: persona_list.index(x), labels_list))
@@ -145,9 +145,10 @@ def getTables(db_config=None):
         keyspace = os.environ['DB_KEYSPACE']
         personaTableName = os.environ['DB_PERSONA_TABLE']
         subPersonaTableName = os.environ['DB_SUB_PERSONA_TABLE']
-        subpersonaEdgeTableName = os.environ['DB_SUB_PERSONA_EDGE_TABLE']
+        subPersonaFaceEdgeTableName = os.environ['DB_SUB_PERSONA_FACE_EDGE_TABLE']
+        faceSubPersonaEdgeTableName = os.environ['DB_FACE_SUB_PERSONA_EDGE_TABLE']
         rawImageTableName = os.environ['DB_RAW_IMAGE_TABLE']
-        faceImageTableName = os.environ['DB_REFINED_IMAGE_TABLE']
+        faceImageTableName = os.environ['DB_FACE_IMAGE_TABLE']
     #Otherwise load db config
     else:
         keyspace = db_config['db-keyspace']
@@ -168,20 +169,20 @@ def repredictImages(session, model, db_config, label_persona_dict):
     labeled_face_ids = filter(lambda x: x.label_v_predict_assoc_flag == True, labeled_face_ids)
     labeled_face_ids = list(map(lambda x: x.assoc_face_id, labeled_face_ids))
     logging.info("Retrieved {0} labeled image ids".format(len(labeled_face_ids)))
-    time.sleep(5)
+    #time.sleep(5)
     
     #Collect facial images which are not labeled to be re-predicted
     #list(session.execute("SELECT assoc_face_id FROM {0} WHERE sub_persona_name={1}".format(faceSubPersonaEdgeTableName, "TEMPORARY")))
     unlabeled_face_ids = list(session.execute("SELECT face_id FROM {0}".format(faceImageTableName)))
     unlabeled_face_ids = list(filter(lambda x: x.face_id not in labeled_face_ids, unlabeled_face_ids))
     logging.info("Retrieved {0} unlabeled face ids".format(len(unlabeled_face_ids)))
-    time.sleep(5)
+    #time.sleep(5)
     
     unlabeled_face_tuples = []
     for row in unlabeled_face_ids:
         results = list(session.execute("SELECT face_id, feature_bytes FROM " + faceImageTableName + " WHERE face_id= %s", (row.face_id,)))
         unlabeled_face_tuples.append((results[0].face_id, results[0].feature_bytes))
-        time.sleep(5)
+        #time.sleep(5)
     logging.info("Retrieved {0} unlabeled face image features".format(len(unlabeled_face_tuples)))
     
     #Label unlabeled images
@@ -253,13 +254,13 @@ def main():
 
     #Check if the blob storage access credentials have been loaded as a secret volume use them
     if os.path.exists('/tmp/secrets/db/db-account'):
-        db_account_name = open('/tmp/secrets/db/db-account').read()
-        db_account_key = open('/tmp/secrets/db/db-key').read()
+        db_account = open('/tmp/secrets/db/db-account').read()
+        db_key = open('/tmp/secrets/db/db-key').read()
         
-        eh_url = open().read()
-        eh_offset_url = open().read()
-        eh_account = open().read()
-        eh = open().read()
+        eh_url = open('/tmp/secrets/eh/eh-url').read()
+        eh_offset_url = open('/tmp/secrets/eh/eh-offset-url').read()
+        eh_account = open('/tmp/secrets/eh/eh-account').read()
+        eh_key = open('/tmp/secrets/eh/eh-key').read()
         
     #Otherwise assume it is being run locally and load from environment variables
     else: 
@@ -273,6 +274,11 @@ def main():
         
     #If the test container is not loaded as an environment variable, assume a local run
     #and use the configuration information in the deployment config
+    
+
+    
+    
+    '''
     if 'DB_PERSONA_EDGE_TABLE' in os.environ:
         db_config = None
     else:
@@ -280,13 +286,12 @@ def main():
         for config in merged_config:
             if config['metadata']['name'] == 'azmlsi-db-config':
                 db_config  = config['data']
-    
+    '''
     #If no db config file is passed, look for the container environment variables
-    if db_config is None:
-        keyspace = os.environ['DB_KEYSPACE']
-    #Otherwise load db config
-    else:
-        keyspace = db_config['db-keyspace']
+    
+    db_config = None
+
+    (keyspace, personaTableName, subPersonaTableName, subPersonaFaceEdgeTableName, faceSubPersonaEdgeTableName, rawImageTableName, faceImageTableName) = getTables(db_config=None)
     
     #Connect to the database
     ssl_opts = {
