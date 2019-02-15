@@ -131,16 +131,6 @@ spec:
     port: 10350
     targetPort: 10350
     name: azure-cosmos-db
-
-
-
-
-
-
-
-
-
-
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -288,6 +278,11 @@ spec:
             configMapKeyRef:
               name: azmlsi-db-config
               key: db-raw-image-table
+        - name: DB_SUB_PERSONA_TABLE
+          valueFrom:
+            configMapKeyRef:
+              name: azmlsi-db-config
+              key: db-sub-persona-table
         ports:
         - containerPort: 10350
           name: azure-cosmo-db
@@ -300,6 +295,9 @@ spec:
         - name: db-secrets
           mountPath: /tmp/secrets/db
           readOnly: true
+        - name: eh-secrets
+          mountPath: /tmp/secrets/eh
+          readOnly: true   
       imagePullSecrets:
       - name: image-pull-secrets
       volumes:
@@ -309,6 +307,9 @@ spec:
       - name: db-secrets
         secret:
           secretName: db-secrets
+      - name: eh-secrets
+        secret:
+          secretName: eh-secrets
 ---
 kind: Service
 apiVersion: v1

@@ -101,13 +101,21 @@ def retrainClassifier(session, db_config):
 
     features_list = []
     labels_list = []
+    classes = len(persona_list)
     logging.info("Found {0} personas".format(len(persona_list)))
-    schema = avro.schema.Parse(open("./VGGFaceFeatures.avsc", "rb").read())
+    schema = avro.schema.Parse(open("./VGGFaceFeatures.avsc", "r").read())
     for persona in persona_list:
-        image_id_list = list(session.execute("SELECT sub_persona_name, assoc_face_id, label_v_predict_assoc_flag FROM {0} WHERE sub_persona_name='{1}'".format(subPersonaFaceEdgeTableName, persona)))
+        image_id_list = list(session.execute("SELECT sub_persona_name, assoc_face_id, label_v_predict_assoc_flag FROM {0} WHERE sub_persona_name='{1}'".format(subPersonaFaceEdgeTableName, persona),timeout=60))
         logging.info("{0} features retrieved for {1}".format(len(image_id_list), persona))
         for image_id in image_id_list:
-            image_features = list(session.execute("SELECT face_id, face_bytes, feature_bytes FROM {0} WHERE face_id='{1}'".format(faceImageTableName, image_id.assoc_face_id)))
+            image_features = None
+            while image_features is None:
+                try:
+                    image_features = list(session.execute("SELECT face_id, face_bytes, feature_bytes FROM {0} WHERE face_id='{1}'".format(faceImageTableName, image_id.assoc_face_id)))
+                except:
+                    time.sleep(60)
+                    pass
+
             for image_byte in image_features:
                 bytes_reader = io.BytesIO(image_byte.feature_bytes)
                 decoder = avro.io.BinaryDecoder(bytes_reader)
@@ -129,7 +137,7 @@ def retrainClassifier(session, db_config):
     model.add(Dense(1024, input_dim=512, activation='relu')) #we add dense layers so that the model can learn more complex functions and classify for better results.
     model.add(Dense(1024,activation='relu')) #dense layer 2
     model.add(Dense(512,activation='relu')) #dense layer 3
-    model.add(Dense(1,activation='sigmoid')) #final layer with softmax activation
+    model.add(Dense(1,activation='softmax')) #final layer with softmax activation
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     model.fit(x=np.array(features_list), y=np.array(homogenized_label_list), epochs=2, batch_size=1)
     scores = model.evaluate(np.array(features_list), np.array(homogenized_label_list))
@@ -165,7 +173,14 @@ def repredictImages(session, model, db_config, label_persona_dict):
     (keyspace, personaTableName, subPersonaTableName, subPersonaFaceEdgeTableName, faceSubPersonaEdgeTableName, rawImageTableName, faceImageTableName) = getTables(db_config)
     
     #Collect a list of the labeled facial images
-    labeled_face_ids = session.execute("SELECT sub_persona_name, assoc_face_id, label_v_predict_assoc_flag FROM {0}".format(subPersonaFaceEdgeTableName))
+    labeled_face_ids = None
+    while labeled_face_ids is None:
+        try:
+            labeled_face_ids = session.execute("SELECT sub_persona_name, assoc_face_id, label_v_predict_assoc_flag FROM {0}".format(subPersonaFaceEdgeTableName))
+        except:
+            time.sleep(60)
+            pass
+
     labeled_face_ids = filter(lambda x: x.label_v_predict_assoc_flag == True, labeled_face_ids)
     labeled_face_ids = list(map(lambda x: x.assoc_face_id, labeled_face_ids))
     logging.info("Retrieved {0} labeled image ids".format(len(labeled_face_ids)))
@@ -173,14 +188,28 @@ def repredictImages(session, model, db_config, label_persona_dict):
     
     #Collect facial images which are not labeled to be re-predicted
     #list(session.execute("SELECT assoc_face_id FROM {0} WHERE sub_persona_name={1}".format(faceSubPersonaEdgeTableName, "TEMPORARY")))
-    unlabeled_face_ids = list(session.execute("SELECT face_id FROM {0}".format(faceImageTableName)))
+    unlabeled_face_ids = None
+    while unlabeled_face_ids is None:
+        try:
+            unlabeled_face_ids = list(session.execute("SELECT face_id FROM {0}".format(faceImageTableName)))
+        except:
+            time.sleep(60)
+            pass
+
     unlabeled_face_ids = list(filter(lambda x: x.face_id not in labeled_face_ids, unlabeled_face_ids))
     logging.info("Retrieved {0} unlabeled face ids".format(len(unlabeled_face_ids)))
     #time.sleep(5)
     
     unlabeled_face_tuples = []
     for row in unlabeled_face_ids:
-        results = list(session.execute("SELECT face_id, feature_bytes FROM " + faceImageTableName + " WHERE face_id= %s", (row.face_id,)))
+        results = None
+        while results is None:
+            try:
+                results = list(session.execute("SELECT face_id, feature_bytes FROM " + faceImageTableName + " WHERE face_id= %s", (row.face_id,)))
+            except:
+                time.sleep(60)
+                pass
+
         unlabeled_face_tuples.append((results[0].face_id, results[0].feature_bytes))
         #time.sleep(5)
     logging.info("Retrieved {0} unlabeled face image features".format(len(unlabeled_face_tuples)))
@@ -190,7 +219,7 @@ def repredictImages(session, model, db_config, label_persona_dict):
         
         face_feature_bytes = face_tuple[1]
         
-        schema = avro.schema.Parse(open("./VGGFaceFeatures.avsc", "rb").read())
+        schema = avro.schema.Parse(open("./VGGFaceFeatures.avsc", "r").read())
         bytes_reader = io.BytesIO(face_feature_bytes)
         decoder = avro.io.BinaryDecoder(bytes_reader)
         reader = avro.io.DatumReader(schema)

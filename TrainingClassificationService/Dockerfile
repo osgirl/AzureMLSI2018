@@ -9,5 +9,5 @@ RUN ./install.sh
 RUN CASS_DRIVER_NO_CYTHON=1 pip3 install -r ./requirements.txt
 COPY ./models.py /usr/local/lib/python3.5/dist-packages/keras_vggface/
 RUN ls .
-ENTRYPOINT ["/bin/sh", "-c"]
-CMD ["python3","TrainingClassificationService.py"]
+ENTRYPOINT ["python3"]
+CMD ["TrainingClassificationService.py"]

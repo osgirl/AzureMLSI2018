@@ -4,7 +4,7 @@ azure-common>=1.1.15
 azure-cosmos>=1.0.0
 cassandra-driver>=1.0.0
 numpy
-avro-python3>=1.8
+avro-python3>=1.8.2
 pillow
 pyyaml
 tensorflow-gpu>=1.12

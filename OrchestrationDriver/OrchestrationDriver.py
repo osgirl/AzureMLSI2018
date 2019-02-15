@@ -61,6 +61,7 @@ def getTables(db_config=None):
     rawImageTableName = db_config['db-raw-image-table']
     faceImageTableName = db_config['db-face-image-table']
 
+
     return (keyspace, personaTableName, subPersonaTableName, subPersonaFaceEdgeTableName, faceSubPersonaEdgeTableName, rawImageTableName, faceImageTableName)
 
 def wipeTables(db_name, db_key, db_config, ca_file_uri):
@@ -214,11 +215,11 @@ def main():
     #cfg = json.load(open('./OrchestrationDriverConfig.json', 'r'))
     #ca_file_uri = "./cacert.pem"
     ca_file_uri = os.environ["CA_FILE_URI"]
-    source_dir = "./TestImages"
+    source_dir = "./images"
     
-    #generateAzureInputStore(bs_config, bs_account_name, bs_account_key, source_dir)
+    generateAzureInputStore(bs_config, bs_account_name, bs_account_key, source_dir)
     wipeTables(db_account_name, db_account_key, db_config, ca_file_uri)
-    #generateCosmoDBStructure(config, db_account_name, db_account_key, ca_file_uri, db_config)
+    generateCosmoDBStructure(config, db_account_name, db_account_key, ca_file_uri, db_config)
 
     
 

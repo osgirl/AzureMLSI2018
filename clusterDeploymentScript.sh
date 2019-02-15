@@ -66,6 +66,7 @@ export EH_ACCOUNT=`az eventhubs namespace authorization-rule keys list --resourc
 export EH_NAMESPACE=azmlsieh
 export EH_NAME=testhub
 export EH_URL="://azmlsieh.servicebus.windows.net/"
+export EH_OFFSET_NAME=currentoffset
 
 #Build and deploy containers to Azure Container Registry
 #ACR_URI="$CONTAINER_ACCOUNT.azurecr.us" #For gov't
@@ -102,7 +103,7 @@ kubectl create secret docker-registry $CR_SECRET_NAME --docker-server $ACR_URI -
 kubectl create secret generic $BLOB_SECRET_NAME --from-literal=blob-storage-account=$BLOB_STORAGE_ACCOUNT --from-literal=blob-storage-key=$BLOB_STORAGE_KEY
 kubectl create secret generic $DB_SECRET_NAME --from-literal=db-account=$COSMOS_DB_ACCOUNT --from-literal=db-key=$COSMOS_DB_KEY
 kubectl create secret generic $CS_SECRET_NAME --from-literal=cs-account=$COG_SERV_NAME --from-literal=cs-key=$COG_SERV_KEY
-kubectl create secret generic $EH_SECRET_NAME --from-literal=eh-url=$EH_NAMESPACE$EH_URL$EH_NAME --from-literal=eh-account=$EH_ACCOUNT --from-literal=eh-key=$EH_KEY
+kubectl create secret generic $EH_SECRET_NAME --from-literal=eh-url=$EH_NAMESPACE$EH_URL$EH_NAME --from-literal=eh-account=$EH_ACCOUNT --from-literal=eh-key=$EH_KEY --from-literal=eh-offset-url=$EH_NAMESPACE$EH_URL$EH_OFFSET_NAME
 kubectl create -f $K8_CLUSTER_CONFIG
 
 
